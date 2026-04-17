@@ -1,0 +1,16 @@
+{
+  "effortLevel": "medium",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/check-deps-staleness.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

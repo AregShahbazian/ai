@@ -1,0 +1,1 @@
+- [Execute directly after clarifying questions are answered](feedback_execute_after_answers.md) — don't re-confirm what he just answered point-by-point

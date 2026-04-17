@@ -1,0 +1,27 @@
+# Allowlist-style gitignore for ~/
+# Everything is ignored by default; only explicitly-listed paths are tracked.
+
+# block everything at root
+/*
+
+# allow specific top-level paths
+!/.gitignore
+!/CLAUDE.md
+!/ai/
+
+# ~/.claude: block all, then allow selected
+!/.claude/
+/.claude/*
+!/.claude/agents/
+!/.claude/commands/
+!/.claude/hooks/
+!/.claude/settings.json
+!/.claude/system.md
+!/.claude/programming.md
+
+# auto-memory (carve-out inside otherwise-ignored projects/)
+!/.claude/projects/
+/.claude/projects/*
+!/.claude/projects/-home-areg/
+/.claude/projects/-home-areg/*
+!/.claude/projects/-home-areg/memory/

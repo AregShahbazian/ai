@@ -1,0 +1,3 @@
+SUPERCHART_DIR=/path/to/Superchart
+COINRAYJS_DIR=/path/to/coinrayjs
+CRYPTO_BASE_SCANNER_DIR=/path/to/crypto_base_scanner
