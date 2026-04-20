@@ -1,7 +1,7 @@
 # CoinrayJS API Reference
 
-> Source: `$COINRAYJS_DIR`
-> Git hash: `b7104d2c890e290acb2e414415fea1e661b1b14f`
+> Source: `$COINRAYJS_DIR` (branch: master)
+> Git hash: `776653b4267a002b623218151bc6cd2485d984a5`
 > Do NOT explore source — use this doc instead.
 
 ## Singleton Access
@@ -19,11 +19,16 @@ const cache = getCoinrayCache()  // CoinrayCache instance
 const candles = await cache.fetchCandles({
   coinraySymbol: "BINA_BTC_USDT",   // required — format: EXCHANGECODE_BASE_QUOTE
   resolution: "60",                  // required — TradingView resolution string
-  start: 1700000000,                 // Unix SECONDS
-  end: 1700003600,                   // Unix SECONDS
+  start: 1700000000,                 // Unix SECONDS — inclusive
+  end: 1700003600,                   // Unix SECONDS — INCLUSIVE (candle at `end` is returned)
   useWebSocket: true,                // optional — prefer WS on first data request
 })
 ```
+
+**End boundary is inclusive** (since `da77dc6`, 2026-04-08). A candle whose bucket
+start equals `end` is returned. Previously past-bucket requests excluded the
+boundary candle while current-bucket requests included it — behavior is now
+consistent across both paths.
 
 ### subscribeCandles(channel, callback) → Promise
 
@@ -87,6 +92,20 @@ cache.onTokenExpired(async () => {
 })
 ```
 
+### Events (CoinrayCache extends EventEmitter)
+
+```javascript
+cache.addEventListener("tickersUpdated", ({ exchangeCode, coinraySymbols }) => {
+  // fired after a ticker refresh updates one or more markets
+})
+```
+
+Event changes (since `de95e9a`, 2025-10-27):
+- `"tickersUpdated"` (NEW, payload `{ exchangeCode, coinraySymbols }`) replaces the
+  previous `"marketsUpdated"` event (no payload). If you were listening to
+  `"marketsUpdated"`, migrate to `"tickersUpdated"` and use the payload's
+  `coinraySymbols` to scope updates instead of rescanning all markets.
+
 ## Candle Shape
 
 ```javascript
@@ -132,6 +151,21 @@ market.takerFee             // number
 market.status               // "ACTIVE" | "DELISTED" | "INACTIVE"
 
 market.getExchange()        // Exchange object
+
+// Cloning (since 62df61a)
+market.clone()              // → new Market — copies a snapshot of all numeric
+                            //   fields plus precisions/flags. Shares the same
+                            //   Coinray API and Exchange refs. Also copies
+                            //   getPriceOverrides and the listeners map (so the
+                            //   clone dispatches to the same subscribers).
+
+// Market is an EventEmitter (since 52f06b9).
+// Emitted events (no payload — re-read market properties inside handler):
+//   "price"   — fired from updateLastPrice; also recomputes market.change
+//   "bidask"  — fired from updateBidAsk
+//   "ticker"  — fired from updateTicker (after bidask + price have been updated)
+market.addEventListener("price", () => { /* ... */ })
+market.removeEventListener("price", handler)
 ```
 
 Key for chart integration:

@@ -1,8 +1,8 @@
 # Superchart Usage Patterns
 
-> Source: `$SUPERCHART_DIR` (example app + source)
-> Superchart git hash: `4fd789f71f9e88e4705f4f72b839ba12791fc64b`
-> coinray-chart git hash: `26a9ca3af3c3055b90c6019a37d206ba08cd45b2`
+> Source: `$SUPERCHART_DIR` (example app + source, branch: main)
+> Superchart git hash: `89a1c9263ca9073ea6019cc9a2a02112ddfe7d1b`
+> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `011e1975dd6f40227d9f3d5d93a65e7aa9be0937`
 > Do NOT explore source — use this doc instead.
 
 ## Initialization Pattern
@@ -127,6 +127,10 @@ Four pointer events are available in addition to symbol/period/range:
 
 All subscribe methods return an unsubscribe function. `PriceTimeResult` carries both
 canvas pixel coordinates and the chart-space `{ time, price }` under the pointer.
+`coordinate.pageX`/`pageY` (page-relative pixels) are populated for `onSelect` /
+`onRightSelect` / `onDoubleSelect` — use them to position floating context menus
+at the click without manual offset arithmetic. They are always 0 for
+`onCrosshairMoved` (no native event origin).
 
 **Overlay consumption:** `onSelect` / `onRightSelect` / `onDoubleSelect` only fire when the
 click lands on the MAIN candle pane AND no overlay consumed the event. If an overlay
@@ -218,6 +222,21 @@ chart.createDropdown({
 
 Returned elements are plain `HTMLElement`s — set `innerHTML`, add classes, etc.
 If called before React mounts, calls are queued and replayed on `onApiReady`.
+
+### Hiding the period bar
+
+```javascript
+// Hide the whole bar at construction
+const sc = new Superchart({ ..., periodBarVisible: false })
+
+// Or toggle at runtime
+sc.setPeriodBarVisible(false)
+
+// Hide individual built-in buttons via CSS targeting the data-button attribute:
+//   [data-button="screenshot"]  { display: none; }
+//   [data-button="fullscreen"]  { display: none; }
+// Full list in SUPERCHART_API.md → "Period Bar Button IDs".
+```
 
 ## Overlay Default Style Templates
 
@@ -435,3 +454,16 @@ klinecharts `dispose()`, remove CSS classes, reset store. `destroy()` is an alia
     reading `from` directly, replay buffer fetches return wrong data. Only the
     `countBack === 0` path needs the fix; normal `countBack > 0` loading is
     unaffected.
+
+17. **`pageX`/`pageY` in `PriceTimeResult`**: `coordinate.pageX`/`pageY` carry
+    page-relative pixels only for `onSelect` / `onRightSelect` / `onDoubleSelect`
+    (pulled from the originating DOM event). They are always `0` for
+    `onCrosshairMoved`. Use them to position a floating context menu at the exact
+    click location without manual offset math.
+
+18. **`SuperchartDataLoader.getConfiguration()` for symbol-search UIs**: The
+    `DatafeedConfiguration` (exchanges, symbolsTypes) captured by `Datafeed.onReady`
+    is now exposed via `dataLoader.getConfiguration()`. SC uses it internally to
+    populate the exchange filter tabs in the built-in symbol-search modal. If
+    application code needs those filter lists (e.g. a custom picker), read them
+    from `getConfiguration()` after `onReady` has fired — returns `null` before.

@@ -14,11 +14,11 @@ Pre-built API reference docs live in `~/ai/crypto_base_scanner_desktop/deps/`:
 ### Rules
 
 1. **Do NOT explore library source.** Read these docs instead of browsing `node_modules/superchart`, `$SUPERCHART_DIR`, `$COINRAYJS_DIR`, or `$CRYPTO_BASE_SCANNER_DIR`.
-2. **Staleness check.** On first read per session, verify git hashes match:
-   - Superchart: `git -C $SUPERCHART_DIR rev-parse HEAD` vs Superchart hash in `SUPERCHART_API.md`
-   - coinray-chart: `git -C $SUPERCHART_DIR/packages/coinray-chart rev-parse HEAD` vs coinray-chart hash in `SUPERCHART_API.md`
-   - CoinrayJS: `git -C $COINRAYJS_DIR rev-parse HEAD` vs hash in `COINRAYJS_API.md`
-   - Backend: `git -C $CRYPTO_BASE_SCANNER_DIR rev-parse HEAD` vs hash in `CRYPTO_BASE_SCANNER_API.md`
+2. **Staleness check.** On first read per session, verify git hashes match. All four repos track their default branch:
+   - Superchart: `main` — `git -C $SUPERCHART_DIR rev-parse HEAD` vs Superchart hash in `SUPERCHART_API.md`
+   - coinray-chart: `main` — `git -C $SUPERCHART_DIR/packages/coinray-chart rev-parse HEAD` vs coinray-chart hash in `SUPERCHART_API.md`
+   - CoinrayJS: `master` — `git -C $COINRAYJS_DIR rev-parse HEAD` vs hash in `COINRAYJS_API.md`
+   - Backend: `master` — `git -C $CRYPTO_BASE_SCANNER_DIR rev-parse HEAD` vs hash in `CRYPTO_BASE_SCANNER_API.md`
    - `SUPERCHART_API.md` and `SUPERCHART_USAGE.md` track both Superchart and coinray-chart hashes — check once per repo.
    - If hashes differ, explore only the changed files (`git diff <old>..<new> --name-only`) and patch the docs.
    - A PreToolUse hook at `~/.claude/hooks/check-deps-staleness.sh` auto-warns on Read/Grep of these docs when hashes are stale.

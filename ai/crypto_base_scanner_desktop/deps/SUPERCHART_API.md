@@ -1,8 +1,8 @@
 # Superchart API Reference
 
-> Source: `$SUPERCHART_DIR`
-> Superchart git hash: `4fd789f71f9e88e4705f4f72b839ba12791fc64b`
-> coinray-chart git hash: `26a9ca3af3c3055b90c6019a37d206ba08cd45b2`
+> Source: `$SUPERCHART_DIR` (branch: main)
+> Superchart git hash: `89a1c9263ca9073ea6019cc9a2a02112ddfe7d1b`
+> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `011e1975dd6f40227d9f3d5d93a65e7aa9be0937`
 > Do NOT explore source — use this doc instead.
 
 ## Exports (`import { ... } from "superchart"`)
@@ -57,6 +57,7 @@ Also re-exports Superchart-specific types: `SuperchartOptions`, `SuperchartApi`,
   scriptProvider?: ScriptProvider
   drawingBarVisible?: boolean           // default: false
   showVolume?: boolean                  // default: true
+  periodBarVisible?: boolean            // default: true — hide to reclaim toolbar space; per-button CSS via [data-button="<id>"]
   periods?: Period[]
   debug?: boolean                       // default: true — set false to silence non-essential logs
 
@@ -95,6 +96,7 @@ setOverlayMode(mode: OverlayMode): void
 getBackendIndicators(): UseBackendIndicatorsReturn | null
 openScriptEditor(options?: { initialCode?: string; readOnly?: boolean }): void
 closeScriptEditor(): void
+setPeriodBarVisible(visible: boolean): void   // show/hide the entire period bar at runtime
 createButton(options?: ToolbarButtonOptions): HTMLElement
 createDropdown(options: ToolbarDropdownOptions): HTMLElement
 onSymbolChange(callback: (symbol: SymbolInfo) => void): () => void   // returns unsubscribe
@@ -143,6 +145,8 @@ interface Datafeed {
 interface SuperchartDataLoader extends DataLoader {
   searchSymbols(userInput: string, exchange: string, symbolType: string,
     onResult: (results: SearchSymbolResult[]) => void): void
+  /** DatafeedConfiguration captured from Datafeed.onReady, or null if not yet fired. */
+  getConfiguration(): DatafeedConfiguration | null
   setOnBarsLoaded(callback: (fromMs: number) => void): void
 
   // Internal — used by ReplayEngine. getBars is called with countBack: 0, so
@@ -231,13 +235,30 @@ Predefined PERIODS constant:
 ### PriceTimeResult
 ```typescript
 {
-  coordinate: { x: number, y: number }        // pixel coordinate on the chart canvas
+  coordinate: { x: number; y: number; pageX: number; pageY: number }
+  // x/y are pixels on the chart canvas.
+  // pageX/pageY are page-relative pixels. Populated for onSelect / onRightSelect /
+  // onDoubleSelect (from the originating DOM event). Always 0 for onCrosshairMoved
+  // (no native event origin).
   point: { time: number /* unix seconds */, price: number }
 }
 ```
 Delivered to `onCrosshairMoved`, `onSelect`, `onRightSelect`, `onDoubleSelect`.
 `time` is computed from the crosshair timestamp (or falls back to pixel→data conversion).
 `price` is computed via `chart.convertFromPixel` on the `candle_pane`.
+
+### SearchSymbolResult
+```typescript
+interface SearchSymbolResult {
+  symbol: string          // internal ticker ID
+  full_name: string       // display name (e.g. "BTC/USDT")
+  description?: string    // human-readable (e.g. "Bitcoin / Tether")
+  exchange?: string
+  type?: string           // "crypto" | "forex" | "stock" | ...
+  logo?: string           // symbol logo URL
+  exchange_logo?: string  // exchange logo URL
+}
+```
 
 ### ToolbarButtonOptions
 ```typescript
@@ -257,6 +278,23 @@ Delivered to `onCrosshairMoved`, `onSelect`, `onRightSelect`, `onDoubleSelect`.
 { type?: 'item', text: string, icon?: string, onClick: () => void }  // clickable item
 { type: 'separator' }                                                  // visual separator
 ```
+
+### Period Bar Button IDs
+
+Each built-in period-bar element has a `data-button` attribute for targeted CSS
+hiding/disabling without removing the whole bar. Custom buttons added via
+`createButton` do NOT get `data-button` — style those via the returned `HTMLElement`.
+
+| `data-button` value  | Element                        |
+|----------------------|--------------------------------|
+| `leftToolbarToggle`  | Left toolbar expand/collapse   |
+| `symbolSearch`       | Symbol name / search trigger   |
+| `periodPicker`       | Period (timeframe) picker      |
+| `indicators`         | Indicators modal button        |
+| `timezone`           | Timezone selector              |
+| `settings`           | Chart settings button          |
+| `screenshot`         | Screenshot button              |
+| `fullscreen`         | Fullscreen toggle              |
 
 ### TimeframeVisibility
 ```typescript
