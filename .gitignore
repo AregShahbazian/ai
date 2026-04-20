@@ -12,6 +12,9 @@
 # scratch prompt staging file — not worth versioning
 /ai/crypto_base_scanner_desktop/prompt.txt
 
+# WebStorm/IDE config for the ~/ai project
+/ai/.idea/
+
 # ~/.claude: block all, then allow selected
 !/.claude/
 /.claude/*
