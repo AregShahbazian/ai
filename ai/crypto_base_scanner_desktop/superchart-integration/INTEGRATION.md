@@ -499,22 +499,25 @@ The app uses TradingView charts in multiple places beyond the main Trading Termi
 - Overlays: grid bot prices (draggable), grid bot orders, trades, backtest time markers
 - **Known issue:** SC global singleton store prevents two SC instances from coexisting. When backtest modal opens over settings page, both SC charts conflict (overlays leak between instances). Blocked on SC library multi-instance support. Reproduction story: `API/MultiChart` in SC storybook. Temporary toggle `SHOW_SETTINGS_CHART` in `grid-bot-settings.js` can disable the settings chart to test backtest in isolation.
 
-**9c. Trading preview — chart settings modal preview** (`sc-settings-preview`)
-- Current: `tradingpreview.js` + `DummyDataProvider` — renders at the top of the chart
-  settings modal (`settings.js`) so users see color/setting changes live as they edit.
-- Uses a fixed symbol (`BINA_USDT_BTC`), fixed resolution (`60`), fixed visible range
-  so the hardcoded overlays (bases, trades, alerts, orders, break-even, bid/ask) always
-  fit the viewport. No live candles, no MarketTabContext — data comes from
-  `settings/dummy-data.js`.
-- Shows color/setting changes **without** pressing Save. The modal passes a local
-  `chartSettings` to the preview; the Save button only persists those settings to Redux
-  (which then affect the main TT chart and every other chart).
-- Needs a new SC variant (`PreviewSuperChartWidget`) alongside the existing
-  `SuperChartWidget` (TT) and `GridBotSuperChartWidget` (grid bot), with a static
-  DataLoader over the dummy candles.
-- SC's single-instance limitation (see 9b) applies — while the preview is mounted the
-  TT main chart must be unmounted and remounted when the preview closes, using the
-  same pattern as the grid-bot settings/backtest workaround.
+**9c. Trading preview — chart settings modal preview** ✅ done (`sc-settings-preview`)
+- SC variant `PreviewSuperChartWidget` (`super-chart/preview-super-chart.js`) replaces
+  the TV `tradingpreview.js` at the top of the chart settings modal. Fixed symbol
+  (`BINA_USDT_BTC`), fixed resolution (`60`), hardcoded candles in `preview-candles.js`.
+- Per-tab overlay configs in `super-chart/preview-tab-configs.js`: Open Orders / Closed
+  Orders / Positions / Alerts / Bases / Quiz+Replay / Misc each declare `rightOffsetPx`,
+  `priceRange`, and a `renderOverlays()` JSX with the relevant live overlay components
+  fed hardcoded dummy data (`preview-trading-data.js`).
+- Live setting/color changes flow through without Save: modal passes merged
+  `{...chartSettings, ...previewSetting}` to the preview. `ChartController` gets
+  `setChartSettingsOverride()` + `setColorsOverride()` (both applied during render, not
+  in a post-commit effect, so child overlay useDrawOverlayEffects see fresh values).
+  Overlays read chartSettings from `useSuperChart().chartSettings` (was Redux).
+- Interaction is disabled globally: `ChartController({nonInteractive: true})` scrubs
+  callbacks on every overlay/order-line at the base-controller chokepoint.
+- SC's single-instance limitation (see 9b) handled the same way as grid-bot settings:
+  TT main chart unmounts via `GridItemSettingsContext.previewShown` while the preview
+  is up. `tradingpreview.js` / `DummyDataProvider` untouched (kept until Phase 9c
+  cleanup; safe since no consumer imports them anymore).
 
 **9d. Quiz question chart** — chart in quiz editor
 - `containers/quizzes/edit/quiz-question-chart.js`

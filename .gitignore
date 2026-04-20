@@ -9,6 +9,9 @@
 !/CLAUDE.md
 !/ai/
 
+# scratch prompt staging file — not worth versioning
+/ai/crypto_base_scanner_desktop/prompt.txt
+
 # ~/.claude: block all, then allow selected
 !/.claude/
 /.claude/*

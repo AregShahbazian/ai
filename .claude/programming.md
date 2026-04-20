@@ -25,6 +25,14 @@ folder, treat that as an implicit "follow my personal workflow" — read
 of substantive work in that repo. The slash command `/myflow` does the same
 thing explicitly.
 
+## Committing the workflow repo
+
+`~/` is itself a git repo that tracks my personal workflow state (`~/ai/`,
+`~/.claude/` selected files, etc.). When I say **"commit my workflow"**,
+that means: commit the repo at `~/` — stage the relevant changes, create
+a commit with a concise message, and present a ≤100-word summary of what
+was changed.
+
 ## Rules
 
 - **Never create or modify files in a repo's own `ai/` folder.** Personal
