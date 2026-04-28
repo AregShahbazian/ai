@@ -813,7 +813,6 @@ To replace the built-in screenshot behavior with custom logic (e.g., upload + sh
 
 ## Known Limitations
 
-- **Global singleton store** — `chartStore.ts` uses module-level signals. Two simultaneous `Superchart` instances share all state (`instanceApi`, `symbol`, `period`, etc.). The second instance overwrites the first. Multi-instance support requires per-instance stores. Reported to SC dev with reproduction story (`API/MultiChart`).
 - **PriceLine `editable: false` not working** — `createPriceLine` does not respect `editable: false`. Lines remain draggable. Reported to SC dev.
 - **Screenshot button not customizable** — No way to override or disable the built-in screenshot button/modal. Need `onScreenshot` callback or `disableScreenshot` option for Altrady's share-modal integration.
 

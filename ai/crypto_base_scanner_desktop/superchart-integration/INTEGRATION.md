@@ -486,7 +486,7 @@ Migrate the app's custom TradingView indicators to klinecharts.
 
 The app uses TradingView charts in multiple places beyond the main Trading Terminal. Each needs SuperChart equivalents.
 
-**Blocker:** SC's global singleton store (`chartStore.ts`) prevents multiple SC instances from coexisting — the second instance overwrites the first's state. This phase (especially 9a /charts) is the most impacted by this limitation, since the charts page mounts multiple independent chart instances simultaneously. Blocked on SC library multi-instance support (reported with reproduction story `API/MultiChart`).
+**Multi-instance:** Resolved in SC `276e661` (per-instance `ChartStore`) and adopted in Altrady via `[sc-multi-chart]` (commit `518c6020`). Two SC instances on the same page coexist cleanly. Replay state keying is page-agnostic via `controller.id`.
 
 **9a. /charts page** — multi-tab chart-only view
 - Currently uses `DefaultTradingWidget` (orders, alerts, trades, bid/ask, break-even, bases, enhancements)
@@ -497,7 +497,7 @@ The app uses TradingView charts in multiple places beyond the main Trading Termi
 - `GridBotSuperChartWidget` in `super-chart/grid-bot-super-chart.js`
 - TV fully replaced by SC in overview, settings, and backtest pages
 - Overlays: grid bot prices (draggable), grid bot orders, trades, backtest time markers
-- **Known issue:** SC global singleton store prevents two SC instances from coexisting. When backtest modal opens over settings page, both SC charts conflict (overlays leak between instances). Blocked on SC library multi-instance support. Reproduction story: `API/MultiChart` in SC storybook. Temporary toggle `SHOW_SETTINGS_CHART` in `grid-bot-settings.js` can disable the settings chart to test backtest in isolation.
+- Settings + backtest dual-chart works after `[sc-multi-chart]` (SC `276e661` per-instance store + Altrady-side cleanup of the `SHOW_SETTINGS_CHART` kill-switch and `getActive()` callers).
 
 **9c. Trading preview — chart settings modal preview** ✅ done (`sc-settings-preview`)
 - SC variant `PreviewSuperChartWidget` (`super-chart/preview-super-chart.js`) replaces

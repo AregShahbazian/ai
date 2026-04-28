@@ -15,12 +15,6 @@
 # WebStorm/IDE config for the ~/ai project
 /ai/.idea/
 
-# design/tasks/review markdown files anywhere under ~/ai/
-# (also matches prefixed variants like something-tasks.md)
-/ai/**/*design.md
-/ai/**/*tasks.md
-/ai/**/*review.md
-
 # ~/.claude: block all, then allow selected
 !/.claude/
 /.claude/*

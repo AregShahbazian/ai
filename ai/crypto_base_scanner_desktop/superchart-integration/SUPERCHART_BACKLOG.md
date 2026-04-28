@@ -11,7 +11,6 @@ Last updated: 2026-04-03
 
 | # | Feature | Blocks | Status | Details |
 |---|---|---|---|---|
-| **1** | **Multi-instance support** | Phase 9 | TODO | Global singleton `chartStore.ts` — second instance overwrites first. Affects: /charts page (multi-tab), grid bot backtest modal over settings, quiz editor, CS, training. Reproduction story: `API/MultiChart`. |
 | **2** | **Replay candle-push mechanism** | Phase 5 | TODO | No way to push candles outside DataLoader flow. Need `pushCandle(KLineData)` or equivalent via `subscribeBar` callback. Must support partial candle updates (update open candle's OHLCV without creating a new bar). See `ai/superchart-integration/phase-5/replay-current-behavior.md` for full current TV behavior. |
 | **3** | **Data reset / re-fetch** | Phase 5, 7 | TODO | Clear all cached candles and force DataLoader to re-fetch from scratch. Needed for: replay start/stop, quiz question transitions, resolution changes during replay. Equivalent to TV's `resetData()` / `resetAllData()`. |
 
@@ -49,12 +48,12 @@ Last updated: 2026-04-03
 | ~~22~~ | ~~PriceLine non-draggable~~ | Resolved with custom `priceLevelLine` overlay. |
 | ~~23~~ | ~~Overlay labels uppercase~~ | Resolved — all `createOrderLine` text uses `.toUpperCase()`. |
 | ~~4~~ | ~~Period-bar visibility control~~ | Shipped as a deliberate subset: `periodBarVisible: boolean` option + `setPeriodBarVisible()` runtime method for the whole bar. Per-button hide/disable is done via consumer CSS against stable `[data-button="<id>"]` attributes on the eight built-in controls — not a JS API. Altrady-side wiring: `periodBarVisible: false` in `preview-super-chart.js`; global CSS rule in `chart-controller.js._applyTemporaryHacks` hides `indicators`, `timezone`, `settings`, `screenshot`, `fullscreen` across every chart. Full API doc: `$SUPERCHART_DIR/ai/features/period-bar-visibility.md`. |
+| ~~1~~ | ~~Multi-instance support~~ | Shipped in SC `276e661` — per-instance `ChartStore` via `createChartStore()`. Altrady adopted via `[sc-multi-chart]` (commit `518c6020`): removed TT↔preview unmount gate and grid-bot kill-switch, converted `getActive()` callers to explicit-id lookups, made replay state keying page-agnostic via `controller.id`. |
 
 ## Priority Order
 
 Sequenced to maximize unblocked Altrady integration time:
 
 1. **#2 + #3** (replay candle-push + data reset) — unblocks Phase 5, the single biggest remaining phase
-2. **#1** (multi-instance) — unblocks all secondary chart pages
-3. **#6** (drawing tools audit) — needed before persistence and quiz design work
-4. Rest follows as needed
+2. **#6** (drawing tools audit) — needed before persistence and quiz design work
+3. Rest follows as needed
