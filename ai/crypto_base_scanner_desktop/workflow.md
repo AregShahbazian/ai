@@ -25,6 +25,15 @@ Pre-built API reference docs live in `~/ai/crypto_base_scanner_desktop/deps/`:
 3. **Superchart has its own `docs/` folder** at `$SUPERCHART_DIR/docs/` (`api-reference`, `data-loading`, `indicators`, `overlays`, `replay`, `scripts`, `storage`, `customization`, `index`). When updating `SUPERCHART_API.md` / `SUPERCHART_USAGE.md`, read those docs alongside the latest source — they are maintained by the SC author and are the primary source of truth. Fall back to source only where docs are incomplete or out of date.
 4. **Resolve `$SUPERCHART_DIR` / `$COINRAYJS_DIR` / `$CRYPTO_BASE_SCANNER_DIR`** by reading `~/ai/crypto_base_scanner_desktop/local.config` at the start of a session.
 
+## Dev server
+
+A dev server (`yarn start-web` or `yarn start`) is always running. Do not
+include `yarn start-web` / `yarn start` / `yarn build` / `npx webpack` /
+similar build commands in tasks, apply-steps, or verification steps. HMR
+picks up most changes; tell me to hard-reload only when a change won't
+hot-reload (constructor signatures, context shape, top-level module
+state, etc.).
+
 ## SuperChart integration
 
 For any SuperChart integration work, read `~/ai/crypto_base_scanner_desktop/superchart-integration/context.md` before starting.

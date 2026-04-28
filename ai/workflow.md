@@ -14,6 +14,8 @@ ai/<feature>/<task>/<subtask>/
 
 Only PRD files are committed. Design, tasks, and review docs are process artifacts — the decisions they capture are embodied in the resulting code and git history.
 
+**Stage new PRDs immediately.** When a new `prd.md` is created, run `git -C ~ add <path>` right away so it shows as a staged change rather than an untracked file. Same applies to any other git-tracked file (e.g. updates to `workflow.md`). Do NOT stage gitignored files (`design.md`, `tasks.md`, `review.md`).
+
 If a subtask has a related but separate piece of work (e.g., a storybook prototype), prefix the doc type:
 
 ```

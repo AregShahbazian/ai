@@ -1,9 +1,30 @@
 # Superchart API Reference
 
 > Source: `$SUPERCHART_DIR` (branch: main)
-> Superchart git hash: `89a1c9263ca9073ea6019cc9a2a02112ddfe7d1b`
-> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `011e1975dd6f40227d9f3d5d93a65e7aa9be0937`
+> Superchart git hash: `42d90ae95bdf1d8d1fa25c7f48a9d21044ab4009`
+> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `c99a96fa8a554bc8a6e9a7fe3fecb655ec6c5b52`
 > Do NOT explore source — use this doc instead.
+
+## Multi-instance support
+
+As of SC `276e661`, every `Superchart` instance owns an isolated `ChartStore`
+(symbol, period, theme, overlays, providers, popup state). Two or more
+instances on the same page coexist without bleed. Required disciplines for
+the host:
+
+- One `Datafeed` (and its `createDataLoader`) per `Superchart` instance —
+  never share.
+- Distinct container DOM elements — never reuse a ref across two
+  constructors.
+- Dispose order on unmount: `superchart.dispose()` then
+  `datafeed.dispose()`.
+- If two instances share `symbol.ticker` and a `storageAdapter` is wired,
+  pass distinct `storageKey`s — SC's default key is `symbol.ticker`.
+- `SymbolInfo.shortName` is rendered in the legend with template
+  `{shortName||ticker} · {period}` (coinray-chart `2d463e69`). Set it for
+  human-friendly labels (`BTC/USDT` instead of `BINA_USDT_BTC`).
+
+Reference story: `$SUPERCHART_DIR/.storybook/api-stories/MultiChart.stories.tsx`.
 
 ## Exports (`import { ... } from "superchart"`)
 
@@ -523,8 +544,16 @@ Properties: `id` (readonly), `paneId` (readonly).
 Creates an arrow marker at a specific price point on a candle. Used for trade markers.
 
 ```typescript
-function createTradeLine(chart: Chart, options?: Partial<TradeLineProperties>): TradeLine
+type TradeLineOptions = Partial<TradeLineProperties> & {
+  onRightClick?: OverlayEventCallback<unknown>  // fires on right-click on the marker
+}
+
+function createTradeLine(chart: Chart, options?: TradeLineOptions): TradeLine
 ```
+
+`onRightClick` was added in SC `42d90ae`. The engine's built-in right-click-delete
+on trade lines is `preventDefault`-ed internally so consumer trade lines are not
+deleted by a right-click.
 
 Chainable setters (each returns TradeLine): `setTimestamp`, `setPrice`, `setDirection` (`'up'`|`'down'`),
 `setText`, `setColor`, `setTextColor`, `setTextBackgroundColor`, `setTextFontSize`,

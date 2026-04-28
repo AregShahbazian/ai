@@ -1,9 +1,27 @@
 # Superchart Usage Patterns
 
 > Source: `$SUPERCHART_DIR` (example app + source, branch: main)
-> Superchart git hash: `89a1c9263ca9073ea6019cc9a2a02112ddfe7d1b`
-> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `011e1975dd6f40227d9f3d5d93a65e7aa9be0937`
+> Superchart git hash: `42d90ae95bdf1d8d1fa25c7f48a9d21044ab4009`
+> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `c99a96fa8a554bc8a6e9a7fe3fecb655ec6c5b52`
 > Do NOT explore source — use this doc instead.
+
+## Multi-instance
+
+Two or more `Superchart` instances on one page coexist as of SC `276e661`.
+Each instance owns its own `ChartStore`. Required disciplines:
+
+- One `Datafeed` per `Superchart` — never share. Each instance constructs
+  its own `new CoinrayDatafeed()` and `createDataLoader(datafeed)`.
+- Distinct container DOM elements — never reuse a `useRef<HTMLDivElement>`
+  across two constructors.
+- Dispose order on unmount: `superchart.dispose()` then `datafeed.dispose()`.
+- Pass distinct `storageKey`s if both instances render the same `ticker`
+  AND a `storageAdapter` is wired. SC's default `storageKey` is
+  `symbol.ticker` and would collide.
+- Pass `SymbolInfo.shortName` for human-friendly legend (template
+  `{shortName||ticker} · {period}`, coinray-chart `2d463e69`).
+
+Reference: `$SUPERCHART_DIR/.storybook/api-stories/MultiChart.stories.tsx`.
 
 ## Initialization Pattern
 
