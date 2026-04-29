@@ -488,9 +488,18 @@ The app uses TradingView charts in multiple places beyond the main Trading Termi
 
 **Multi-instance:** Resolved in SC `276e661` (per-instance `ChartStore`) and adopted in Altrady via `[sc-multi-chart]` (commit `518c6020`). Two SC instances on the same page coexist cleanly. Replay state keying is page-agnostic via `controller.id`.
 
-**9a. /charts page** — multi-tab chart-only view
-- Currently uses `DefaultTradingWidget` (orders, alerts, trades, bid/ask, break-even, bases, enhancements)
-- Each tab is an independent chart instance with its own `ChartLayoutsController`
+**9a. /charts page** ✅ done (`[sc-charts-page]`) — multi-tab chart-only view
+- New `ChartsPageChartWidget` (`super-chart/charts/charts-page-chart.js`).
+  TT and /charts share `useMarketTabChart` + `MarketTabChartOverlays`.
+- Per-cell SC: own symbol, resolution, visible range, replay state.
+  Trading flows (Buy/Sell, order edit) excluded — same as TV /charts.
+- Replay forced to DEFAULT mode (no smart replay on /charts).
+- Header buttons gated by independent `mainChart / showReplay / showSettings`
+  flags; /charts uses `mainChart={false} showReplay showSettings`.
+- FlexLayout tabstrip hidden; cell drag uses `MarketHeaderBar` as the
+  drag handle via `FlexLayoutsController.layoutInstance.moveTabWithDragAndDrop`.
+- Tab-click bump (`lastInteractedChartTabId`) lives on
+  `ChartTabsController.handleTabClick` to avoid React-side stale-closure desync.
 - Managed by: `containers/charts.js`, `models/flex-layout/chart-layouts-controller.js`, `models/market-tabs/chart-tab.js`
 
 **9b. Grid bot chart** — SC integration done (`sc-grid-bot`, `sc-grid-bot-backtest`)
@@ -541,25 +550,26 @@ toggleable `CandleChart` widget, a dev-widget guard, and a layout migration
 from `CenterView` to `CandleChart`. The coexistence pieces (toggle UI,
 `useSuperChart` Redux state, `DevWidgetGuard`) were removed in Phase 5 when
 the Trading Terminal switched to SC-only. What remains from Phase 10 is
-the layout migration and the `CandleChart` wrapper, which now renders SC
-for the Trading Terminal and TV for the Charts page pending that page's
-own SC migration.
+the layout migration and the `CandleChart` wrapper. After
+`[sc-charts-page]` shipped, `CandleChart` is a thin TT-only wrapper that
+always renders the SC `TradingTerminalChartWithProvider` (no `toggleable`
+branch, no TV path). /charts mounts `ChartsPageChartWidget` directly via
+`ChartsGridItem`.
 
 See `phase-10/review.md` for the full list of Phase-10 pieces that were
 undone.
 
-#### 10a. CandleChart wrapper ✅ (toggle removed)
+#### 10a. CandleChart wrapper ✅ (TT-only)
 
-`CandleChart` is a thin wrapper that renders SC in the Trading Terminal
-and TV in the Charts page, gated by the `toggleable` prop passed by the
-grid item:
+After `[sc-charts-page]` shipped, `CandleChart` is a TT-only wrapper that
+always renders `TradingTerminalChartWithProvider` (SC). The `toggleable`
+prop and the TV branch are gone.
 
-- **TT (`toggleable=true`):** always renders `SuperChartWidgetWithProvider`.
-  No toggle UI, no Redux state read.
-- **Charts page (`toggleable=false`):** always renders `DefaultTradingWidget`
-  (TV). Will be replaced by SC when the Charts page migrates.
+- **TT:** mounts SC via `CandleChart` from the FlexLayout grid.
+- **Charts page:** mounts `ChartsPageChartWidget` directly via
+  `ChartsGridItem` — no `CandleChart` indirection.
 - **Other pages** (quiz, customer service, shared bots, grid bots) mount
-  their chart widgets directly — no `CandleChart` indirection.
+  their chart widgets directly.
 
 #### 10b. ~~SC Single-Instance Guard~~ (removed)
 
@@ -600,14 +610,14 @@ Phase 4) or moot.
 
 #### 10f. TV Removal (in progress, pre-release)
 
-Trading Terminal: ✅ done (Phase 5 decommission). Remaining TV consumers
-are the Charts page and non-TT contexts (quizzes, customer service,
-training, market explorer). Full removal before release:
+Trading Terminal: ✅ done (Phase 5 decommission). Charts page: ✅ done
+(`[sc-charts-page]`). Remaining TV consumers are non-TT contexts (quizzes,
+customer service, training, market explorer). Full removal before release:
 
 1. ✅ `chartSettings.useSuperChart` Redux state removed
 2. ✅ `DevWidgetGuard` and standalone `SuperChart` dev widget removed
-3. Migrate Charts page: `CandleChart` drops the `toggleable` prop and
-   always renders SC
+3. ✅ Migrate Charts page (`[sc-charts-page]`): `CandleChart` is now TT-only
+   (always SC), and /charts mounts `ChartsPageChartWidget` directly
 4. Migrate remaining TV consumers (quiz, CS, training, market explorer)
 5. Delete `vendor/tradingview/` (6 vendored builds)
 6. Remove CopyWebpackPlugin entry for tradingview

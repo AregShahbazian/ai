@@ -104,8 +104,9 @@ older docs or commit messages may not match current code.
   were deleted; legacy layouts that still reference `SuperChart` resolve
   to `UnknownWidget`.
 - **TV path inside the Trading Terminal's `CandleChart`** — the TV render
-  branch was removed from the TT code path. TV rendering still exists in
-  the file but is only exercised when `toggleable=false` (Charts page).
+  branch was removed from the TT code path. The remaining `toggleable=false`
+  TV path (Charts page) was retired in `[sc-charts-page]`; `CandleChart` is
+  now a TT-only wrapper with a single SC render branch.
 - **TV share modal in the Trading Terminal** — the `Screenshot` component
   inside `TradingViewComponent` was never un-mounted in Phase 5, but it's
   no longer reachable from TT (TT never renders TV). It remains for the
@@ -122,9 +123,10 @@ older docs or commit messages may not match current code.
   on app load and stays idempotent. `CenterView` remains removed from
   the widget palette.
 - **`CandleChart` wrapper component** — lives in
-  `widgets/candle-chart.js`, branches on `toggleable`. Used by the
-  Trading Terminal (SC) and the Charts page (TV). Will lose the
-  `toggleable` prop when the Charts page migrates to SC.
+  `widgets/candle-chart.js`. After `[sc-charts-page]` it's TT-only and
+  always renders `TradingTerminalChartWithProvider` (SC). The
+  `toggleable` prop and the TV branch were removed; /charts mounts
+  `ChartsPageChartWidget` directly via `ChartsGridItem`.
 - **Screenshot behavior** — notes screenshots are SC-only via
   `ChartRegistry.getActive()`. Still correct; simplified because TT
   always has a CandleChart → always has an active SC.

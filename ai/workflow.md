@@ -205,6 +205,19 @@ What actually fixed it.
 - Only create when explicitly told to — not automatically after every fix.
 - When working on a bugfix, DO remind the user of the above procedure and suggest tracking the bugfix.
 
+## Code Style
+
+### Comments
+
+Default to no comments. When a comment is genuinely needed:
+
+- Keep it under 3 lines unless a longer explanation is absolutely necessary (subtle invariant, hidden constraint, non-obvious workaround).
+- Be terse — short and concise, no narration.
+- Don't restate what the code does. Don't explain the obvious.
+- Don't reference the current task / fix / PR (those belong in the commit message).
+
+If removing the comment wouldn't confuse a future reader, don't write it.
+
 ## Local Config (`ai/local.config`)
 
 Dev-specific paths to sibling repos are stored in `ai/local.config`. This file is gitignored — copy `ai/local.config.example` and fill in your paths.
