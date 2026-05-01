@@ -98,6 +98,14 @@ stay identical to prod.
   they push intent through the same `MarketTab` / `chartController` pipeline
   TT uses. Sequencing across `setCurrentTime(null) → setSymbol/setPeriod →
   setCurrentTime(newStart)` reuses the Phase 5 pattern verbatim.
+- **Per-question candle storage is removed.** TV-prod saved a question's
+  candles alongside the question on the backend so a quiz could still play
+  even if the candle provider lost the data. Our provider has become
+  reliable enough that this fallback is no longer warranted. The backend
+  still requires a `candles` field on the create/update payload — we send
+  `[]`. No frontend code reads stored candles or falls back to them when
+  fetching from the provider. Quiz play / preview / edit always go through
+  `chartController.replay` (which uses the SC datafeed → CoinrayCache).
 
 ---
 
@@ -131,11 +139,23 @@ reads `QuizContext`, `inQuizzes`, `editQuestionWidgetActive`, or
 | `util/selectors.js` | Drop the `inQuizzes` path-based selector if no remaining consumer exists after the edits above. (`util.pathIsInQuizzes` may still be used elsewhere — check before removing.) |
 | `containers/quizzes/edit/quiz-question-chart.js` | The handlers `handleTVSymbolChanged` / `handleTVIntervalChanged` are renamed and re-wired to the SC widget's symbol/period change callbacks (already exposed by `chartController` via `onSymbolChange` / `onPeriodChange`). |
 
-### Files that stay (quiz lives at `/quizzes` — these are quiz-route consumers, NOT TT)
+### Move `QuizContextProvider` mount down to `/quizzes`
 
-- `containers/logged-in.js` — keeps `QuizContextProvider` as a top-level wrapper so `/quizzes` routes have it.
-- `containers/quizzes.js` — `useContext(QuizContext)` here is fine (it's the quiz route entry).
-- `containers/main-menu/main-menu-mobile.js` — reads `questionController` to alter mobile menu while a quiz is being played; this is a /quizzes-aware concern but the menu itself isn't TT-coupled. Keep.
+Currently the provider mounts in `containers/logged-in.js`, exposing `QuizContext` to the entire logged-in subtree. That's another TT-quiz remnant — only two consumers exist outside the `/quizzes` route, both replaceable:
+
+| Current cross-route consumer | Replacement |
+|---|---|
+| `containers/logged-in.js:79` (`useAppGlobals`) — reads `quizController` only to feed it to `storeGlobal({quizController})` (a dev-only `window.quizController` debug helper). | Drop the `quizController` field from this `storeGlobal` call entirely. If dev console access is wanted, register it inside `useQuiz` (so `window.quizController` is populated whenever the user is on `/quizzes`). |
+| `containers/main-menu/main-menu-mobile.js:46` — reads `questionController?.question?.questionMode` to hide the mobile bottom-nav while a quiz question is active in play / preview mode. | Add a Redux flag `state.quiz.activeQuestionMode` (`"play"` / `"preview"` / `null`) maintained by `PlayController` / `PreviewController` via `QuizReduxController`. Mobile menu reads `QuizSelectors.selectIsInPlayOrPreview` via `useSelector` — no `QuizContext` dependency. |
+
+After both replacements, `QuizContextProvider` has no remaining cross-route consumer and moves to `containers/quizzes.js` (wraps the `/quizzes/*` umbrella). The `<QuizContextProvider>` wrapper is removed from `logged-in.js`.
+
+**State-persistence note.** Server-persisted state (`openQuizResult`, answers, timings, agree/disagree feedback) survives a `/quizzes` ↔ `/trade` round trip because it's reloaded from the backend on entering a quiz topic. Ephemeral React state inside `useQuiz` (the in-memory `question` pointer, `prevQuestion`, draw-state) does not — the controller re-instantiates per `/quizzes` mount. Redux-backed state (settings, timings, the new `activeQuestionMode` flag) persists across navigation.
+
+### Files that stay (quiz route consumers, NOT TT)
+
+- `containers/quizzes.js` — becomes the `QuizContextProvider` mount point.
+- All `containers/quizzes/*` route files — `useContext(QuizContext)` here is fine.
 
 ---
 

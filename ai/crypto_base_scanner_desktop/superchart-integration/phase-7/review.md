@@ -1,0 +1,230 @@
+# Phase 7: Quiz System — Review
+
+User-visible verification for `prd.md` (`id: sc-quiz`) +
+`design.md` + `tasks.md`. Only items observable in the UI.
+
+---
+
+## Round 1: Initial implementation
+
+### Verification
+
+#### Time-travel semantics (visual comparison vs. TV-prod)
+
+The SC replay engine has its own current-time semantics:
+`getReplayCurrentTime()` is the **close** time of the last visible candle
+(not its start), partial candles appear when the cursor lands mid-period,
+and there's a known one-candle trigger-timing offset. The quiz code feeds
+quiz timestamps into `setCurrentTime` and `playUntil`. Walk every
+boundary visually:
+
+1. **Animated reveal stops at the right spot (play, animation ON).**
+   Open a play question whose `solutionStart` is `2025-09-15 14:00` on a
+   1H chart. After the animation pauses, hover the last visible candle —
+   its open time should be `13:00` and close time `14:00`. The "current
+   time" shown in any timeline overlay should read `14:00`. If the engine
+   stops one candle early (last candle reads `12:00–13:00`) or one candle
+   late (last reads `14:00–15:00`), flag it.
+2. **Solution reveal stops at the right spot (play, post-answer).**
+   Submit an answer; `playUntil(solutionEnd)` runs. Last drawn candle
+   should be the one whose close time equals `solutionEnd`.
+3. **Cut to solutionStartNextCandle (play, animation OFF, unanswered).**
+   With animation toggled off, open an unanswered question. Last visible
+   candle's close time should be `solutionStartNextCandleTime`.
+4. **Cut to solutionEnd (play, animation OFF, answered).** Same question
+   after answering. Last visible candle should be the one closing at
+   `solutionEnd`.
+5. **Partial candle behaviour.** Pick a question whose `solutionStart` is
+   `2025-09-15 14:30` on a 1H chart (mid-period). Animation OFF. The
+   chart should show the 14:00 candle as a **partial** with OHLCV up to
+   14:30 only, not as a full closed candle.
+6. **Question-transition target.** With animation ON, transition between
+   two consecutive same-symbol/same-resolution questions. After the
+   transition `playUntil` pauses, the last visible candle should be the
+   one closing at the new question's `questionStartTime`. (Then the
+   normal animation up to `solutionStart` continues.)
+
+#### Edit / New mode
+
+7. **Open `/quizzes/edit/<id>`.** Chart loads, period bar visible, no
+   replay controls panel visible.
+8. **Header in edit mode shows only Settings.** No Alert, no Buy, no
+   Sell, no Replay.
+9. **Live ticks update the latest candle.** Wait 1 minute on a 1m
+   resolution and watch the last candle update — the in-progress candle's
+   close should change as live ticks arrive.
+10. **Click "Set Solution Start" sidebar button** → the button highlights
+    → click on the chart at a target time → `solutionStart` updates in
+    the form, the solution-start timeline overlay appears at that time
+    on the chart.
+11. **Click "Set Solution End" sidebar button** → same flow, solution-end
+    overlay appears.
+12. **Bg context-menu in edit mode.** Right-click chart background →
+    "Set Solution Start" and "Set Solution End" entries appear → click
+    "Set Solution Start" → click on chart → same effect as #10.
+13. **Refresh ranges button** in the sidebar → chart re-centers on the
+    current question's `visibleTimeRange`.
+14. **New question.** From an existing quiz, click "Add Question" →
+    routes to new-question form → chart mounts in `new` mode with the
+    same header/period-bar policy as `edit`.
+15. **Change question's symbol** in the form → chart re-mounts on the new
+    market, candles load.
+16. **Change question's resolution** in the form → chart switches to the
+    new resolution, candles reload.
+
+#### Play mode
+
+17. **Open `/quizzes/play/<quiz-id>` or random.** Chart loads with no
+    header bar at all and no period bar.
+18. **First question, animation ON.** Candles animate from
+    `questionStartTime` up to `solutionStart`, then pause. Sidebar shows
+    question text + answer options.
+19. **First question, animation OFF.** Toggle animation off in settings,
+    open a question. Chart cuts directly to `solutionStartNextCandle`,
+    no animation.
+20. **Submit answer with animation ON.** Click an answer option →
+    candles animate from `solutionStart` to `solutionEnd` → pause.
+    Solution + correct-answer reveal in sidebar.
+21. **Submit answer with animation OFF.** Click an answer option →
+    candles cut to `solutionEnd`. Solution reveal in sidebar.
+22. **Show hint.** Click hint button mid-question → hint drawing overlay
+    appears on chart. Toggle off → drawing disappears.
+23. **Skip a question** → next question loads, prev question marked as
+    skipped in progress strip. Skipped questions can be revisited.
+24. **Same-symbol/resolution transition (animation ON).** Move between
+    two consecutive questions on the same market that pass the
+    `questionsCanTransition` rules. The chart animates smoothly forward
+    without a reset/flicker. Solution-start/solution-end timelines for
+    the previous question fade off, the new question's overlays appear.
+25. **Different-symbol/resolution transition.** Move between two
+    questions on different markets. The chart resets, switches market,
+    and starts a fresh animation from the new question's
+    `questionStartTime`. No animation across the gap.
+26. **Speed control mid-animation.** Start a question with animation ON,
+    change the speed slider mid-flight in settings → the in-progress
+    animation visibly speeds up or slows down without a stutter or
+    re-start.
+27. **Pause / resume the animation.** Some quiz controls let the user
+    pause; the animation pauses on the current candle, resumes from
+    there. (If quiz has no pause UI, skip this — confirm during impl.)
+28. **Agree / disagree feedback.** After answer reveal, click agree or
+    disagree → feedback persists across reload of the same question.
+29. **Finish a quiz.** Answer all questions → results page renders,
+    accuracy %, time, etc. all match the answers given.
+30. **Resume a partially-answered quiz.** Quit mid-quiz, re-enter from
+    `/quizzes` listing → the first unanswered question loads with the
+    correct prior-state.
+
+#### Preview mode
+
+31. **Open `/quizzes/edit/preview/<quizId>/<questionId>`.** Chart loads
+    with no header bar and no period bar.
+32. **Animation runs in preview.** Candles animate from
+    `questionStartTime` to `solutionStart` once, then pause. Sidebar
+    shows the question.
+33. **Submitting an answer in preview is non-persistent.** Click an
+    answer option → solution reveal happens, but reloading the page
+    starts the question fresh (no answer persisted).
+34. **Hint toggle works** like in play.
+35. **Bg context-menu in preview.** Right-click chart background → the
+    "Set Solution Start" / "Set Solution End" entries are **NOT**
+    present.
+36. **No Alert/Buy/Sell/Replay/Settings buttons** anywhere on or above
+    the chart in preview.
+
+#### Quiz overlays
+
+37. **Solution-start vertical line** appears at `solutionStart` time
+    when in edit/new/play/preview (where applicable). Colour matches the
+    pre-port `chartColors.quizSolutionStart`.
+38. **Solution-end vertical line** appears at `solutionEnd`. Colour
+    matches `chartColors.quizSolutionEnd`.
+39. **Decision-point arrow** appears at the decision point in the
+    relevant modes (visually identical to TV-prod placement).
+40. **Overlays clear on question change.** Move from question A to
+    question B (different solution times) → A's lines/arrow disappear,
+    B's appear.
+41. **Overlays clear on chart reset.** Trigger a hard transition
+    (different symbol) → previous question's overlays gone after reset.
+
+#### Drawings / indicators noop verification
+
+42. **Edit mode does not crash when drawing.** In edit mode, open the
+    drawing toolbar (if SC exposes one) → draw a trendline. Chart should
+    not throw, drawing renders locally. **Reload** → drawing is gone
+    (this is the deferred behaviour, documented in `deferred.md`).
+43. **No save/restore on question change.** Switch between questions
+    in edit mode — no console errors about `getAllShapes` /
+    `createStudy` / `saveChartToServer` calls failing.
+
+#### TT-decoupling regression
+
+44. **`/trade` opens normally.** Chart loads, all overlays (orders,
+    alerts, trades, bid/ask, break-even) render. Buy/Sell/Alert/Replay
+    header buttons all visible and functional.
+45. **TT chart bg context-menu.** Right-click chart background in
+    `/trade` → trading / alert / replay entries present, **no**
+    `setSolutionStart` / `setSolutionEnd` entries.
+46. **`EditQuizQuestion` widget gone.** Open the FlexLayout widget
+    picker / "Add Widget" → "Edit Quiz Question" is no longer an option.
+    Layouts that previously had an `EditQuizQuestion` node load without
+    crashing (the node falls through to `UnknownWidget` or is silently
+    dropped).
+47. **No `i18n` warning for `widgets.EditQuizQuestion`** in the console
+    on `/trade`.
+
+#### Cross-route navigation
+
+48. **`/quizzes` → `/trade` → `/quizzes`.** Navigate quiz → trade →
+    quiz. No console errors, both routes mount cleanly each time. SC
+    chart instance disposes and reinitialises correctly.
+49. **`/quizzes` (deep-link).** Open `/quizzes/play/<id>` directly in a
+    fresh tab without visiting `/quizzes` listing first → mounts cleanly.
+50. **Quiz progress survives `/quizzes` ↔ `/trade` round-trip.** Start
+    a quiz, answer 2 questions, navigate to `/trade`, return to
+    `/quizzes`, open the same quiz topic. The two answered questions
+    are still marked answered (server-persisted). The current
+    in-progress question can be resumed.
+
+#### Provider scoping (mobile-menu Redux flag + provider mount)
+
+51. **Mobile bottom-nav hides while playing a question.** On mobile,
+    open `/quizzes/play/<id>` and wait for a question to load. Bottom
+    nav disappears as soon as the question is active.
+52. **Mobile bottom-nav hides during preview.** Same for
+    `/quizzes/edit/preview/<quizId>/<questionId>`.
+53. **Mobile bottom-nav stays visible everywhere else.** On
+    `/dashboard`, `/markets`, `/trade`, `/quizzes` listing, and
+    `/quizzes/edit/<id>` (edit / new mode) — bottom nav is visible.
+54. **Mobile bottom-nav reappears after quitting a quiz.** While in
+    play, click Quit → return to listing → bottom nav back.
+55. **`/trade` does not read QuizContext.** Open `/trade` directly in a
+    fresh tab without visiting `/quizzes` first. No console errors
+    about a missing context provider; chart and trading panels load
+    normally.
+
+#### Per-question candle storage removed
+
+56. **Create a brand-new question.** In edit mode, fill out a new
+    question (symbol, resolution, solution start/end, answer options) and
+    click Save. The save completes without the historical "fetching
+    candles" toast / wait. The question shows up in the quiz immediately
+    after.
+57. **No "no data could be found" toast.** With the toast string gone,
+    saving a new question never shows that toast — even if the chosen
+    market has limited history.
+58. **Play a freshly-created question.** Open the new question from `play`
+    mode → candles load correctly via the live provider (no fallback to a
+    stored array). Animation runs as expected.
+59. **Edit and re-save an existing question.** No regression — saving an
+    edit completes without the candle-fetch step.
+60. **Open a pre-port question that has stored candles in the DB.**
+    Frontend ignores any candles payload returned by the backend; chart
+    candles come purely from the live provider. Behaviour is
+    indistinguishable from a question with `candles: []`.
+
+#### Internationalisation
+
+61. **English / Dutch / Spanish quiz UI.** Switch language → all quiz
+    UI strings (sidebar buttons, controls, modal text, header) appear
+    correctly translated. No untranslated keys visible.
