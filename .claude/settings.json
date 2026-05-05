@@ -1,5 +1,4 @@
 {
-  "effortLevel": "medium",
   "hooks": {
     "PreToolUse": [
       {
@@ -12,5 +11,7 @@
         ]
       }
     ]
-  }
+  },
+  "effortLevel": "medium",
+  "model": "sonnet"
 }

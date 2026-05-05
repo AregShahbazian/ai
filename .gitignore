@@ -12,6 +12,10 @@
 # scratch prompt staging file — not worth versioning
 /ai/crypto_base_scanner_desktop/prompt.txt
 
+# Playwright MCP output (snapshots, console logs, browser profile)
+/ai/playwright-mcp/
+/ai/playwright-profile/
+
 # WebStorm/IDE config for the ~/ai project
 /ai/.idea/
 

@@ -38,6 +38,26 @@ state, etc.).
 
 For any SuperChart integration work, read `~/ai/crypto_base_scanner_desktop/superchart-integration/context.md` before starting.
 
+## Browser console debugging via Playwright MCP
+
+**This is a crucial debugging instrument.** The Playwright MCP server is configured globally (`~/.claude.json`) and gives Claude live browser access. Use it generously — whenever you need to inspect runtime state, verify behavior, or confirm a bug, reach for the browser instead of guessing from source.
+
+Full reference — URLs, `storeGlobal` objects, DOM selectors, snippets:
+**`~/ai/crypto_base_scanner_desktop/playwright-guide.md`**
+
+### How to use
+
+1. Navigate to the relevant page: `mcp__playwright__browser_navigate` with the app URL (`http://localhost:5001/#/...`)
+2. Run JS: `mcp__playwright__browser_evaluate` with a `() => expression` function
+3. Avoid returning circular objects — extract primitives (`.length`, specific fields, `JSON.stringify` with a replacer)
+
+**Suggest this to the user proactively** when:
+- Verifying that a controller/state update worked
+- Checking how many items are in a list
+- Reading live Redux state
+- Measuring DOM layout (widths, heights, positions)
+- Confirming a global is wired up correctly after a code change
+
 ## Related personal agents
 
 - `sc-source-explorer` (`~/.claude/agents/`) — investigates Superchart / coinray-chart source and returns concise summaries so the main thread never reads SC source directly.
