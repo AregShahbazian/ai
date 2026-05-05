@@ -4,11 +4,13 @@ Tasks for `prd.md` (`id: sc-quiz`) + `design.md`.
 
 Order matters: each task assumes the previous ones have landed.
 
+✅ = done and merged into the working branch.
+
 ---
 
-## 1. TT decoupling — remove TT-side quiz remnants
+## 1. TT decoupling — remove TT-side quiz remnants ✅
 
-### 1.1 Delete `EditQuizQuestionWidget` + grid registration
+### 1.1 Delete `EditQuizQuestionWidget` + grid registration ✅
 
 **Files:**
 - Delete: `src/containers/trade/trading-terminal/widgets/edit-quiz-question-widget.js`
@@ -22,7 +24,7 @@ Order matters: each task assumes the previous ones have landed.
 `edit-quiz-question-widget` in `src/`. Open `/trade`, the widget picker no
 longer shows "Edit Quiz Question".
 
-### 1.2 Remove `EditQuizQuestion` translations
+### 1.2 Remove `EditQuizQuestion` translations ✅
 
 **Files:**
 - `src/locales/en/translation.yaml`, `nl/translation.yaml`,
@@ -30,7 +32,7 @@ longer shows "Edit Quiz Question".
 
 **Verify:** grep `EditQuizQuestion` returns zero matches across `src/locales/`.
 
-### 1.3 Drop quiz reads from TT chart code
+### 1.3 Drop quiz reads from TT chart code ✅
 
 **Files:**
 - `src/containers/trade/trading-terminal/widgets/center-view/tradingview.js`
@@ -57,7 +59,7 @@ longer shows "Edit Quiz Question".
 returns zero matches. Open `/trade`, TT chart loads, Buy/Sell/Alert/Replay
 header buttons all behave as before.
 
-### 1.4 Drop quiz gates from SC TT chart context-menu controller
+### 1.4 Drop quiz gates from SC TT chart context-menu controller ✅
 
 **File:** `src/containers/trade/trading-terminal/widgets/super-chart/controllers/context-menu-controller.js`
 
@@ -70,7 +72,7 @@ header buttons all behave as before.
 **Verify:** open `/trade`, right-click chart background — the menu still
 shows trading / alert / replay entries unaffected.
 
-### 1.5 Drop `inQuizzes` selector if unused
+### 1.5 Drop `inQuizzes` selector if unused ✅ (kept — still used inside /quizzes route for layout widths)
 
 **File:** `src/util/selectors.js`
 - After tasks 1.3 and 1.4, grep `Selectors.inQuizzes` and `pathIsInQuizzes`.
@@ -81,9 +83,9 @@ shows trading / alert / replay entries unaffected.
 
 ---
 
-## 2. Move quiz module out of TT folder
+## 2. Move quiz module out of TT folder ✅
 
-### 2.1 Move quiz-context + use-quiz
+### 2.1 Move quiz-context + use-quiz ✅
 
 **Files:**
 - Move `src/containers/trade/trading-terminal/quiz/quiz-context.js`
@@ -92,7 +94,7 @@ shows trading / alert / replay entries unaffected.
   → `src/containers/quizzes/use-quiz.js`.
 - Delete the (now-empty) `src/containers/trade/trading-terminal/quiz/` folder.
 
-### 2.2 Drop `editQuestionWidgetActive`
+### 2.2 Drop `editQuestionWidgetActive` ✅
 
 **File:** `src/containers/quizzes/quiz-context.js`
 - Remove `editQuestionWidgetActive: false` from `QUIZZES_CONTEXT_SHAPE`.
@@ -101,7 +103,7 @@ shows trading / alert / replay entries unaffected.
 - Remove the `editQuestionWidgetActive` selector + memo + return value.
 - Remove `import {TradingLayoutSelectors} from ...` (no longer needed).
 
-### 2.3 Update import paths
+### 2.3 Update import paths ✅
 
 **Files (anything that imports `QuizContext`, `QUESTION_MODES`,
 `QUIZZES_*_STATE_SHAPE`, `QuizContextProvider`, or `useQuiz`):**
@@ -121,7 +123,7 @@ to `~/containers/quizzes/quiz-context`. Same for `use-quiz`.
 **Verify:** grep `trading-terminal/quiz/` returns zero matches in `src/`.
 Open `/quizzes` — pages mount and `quizController` is reachable.
 
-### 2.4 Move `QuizContextProvider` mount down to `/quizzes`
+### 2.4 Move `QuizContextProvider` mount down to `/quizzes` ✅
 
 Per `design.md` "Quiz module relocation + provider scoping". The provider
 currently mounts in `logged-in.js`; both cross-route consumers
@@ -166,7 +168,7 @@ call. Skip this if dev console access isn't needed.
 unless re-registered inside `useQuiz`). Open `/quizzes` — quiz works,
 controller initialises, route navigation between quiz sub-routes works.
 
-### 2.5 Replace mobile-menu QuizContext read with Redux selector
+### 2.5 Replace mobile-menu QuizContext read with Redux selector ✅
 
 Per `design.md` §1a. New Redux flag `state.quiz.activeQuestionMode`
 maintained by `PlayController` / `PreviewController`, read by the mobile
@@ -218,9 +220,9 @@ bottom nav reappears. Same for `/quizzes/preview/<id>`. On `/trade`,
 
 ---
 
-## 3. `DrawController` refactor
+## 3. `DrawController` refactor ✅
 
-### 3.1 Strip TV-coupled surface
+### 3.1 Strip TV-coupled surface ✅
 
 **File:** `src/models/quiz/draw-controller.js`
 
@@ -236,7 +238,7 @@ Per `design.md` section 3:
   `subtractTimeInCandles` (move to `Question` if needed),
   `reloadTradingView`.
 
-### 3.2 Add SC-driven candle reveal
+### 3.2 Add SC-driven candle reveal ✅
 
 Per `design.md` section 3:
 
@@ -249,7 +251,7 @@ Per `design.md` section 3:
 - Refactor `setVisibleRange` to delegate to `chartController.setVisibleRange`
   (unix seconds).
 
-### 3.3 Stub drawings/indicators methods as noops
+### 3.3 Stub drawings/indicators methods as noops ✅
 
 Per `design.md` section 3 + 7. Add `// deferred (sc-quiz):` comment to each.
 
@@ -259,7 +261,7 @@ Open `/quizzes/play/<some-quiz>`, animation triggers progressive reveal.
 
 ---
 
-## 4. `QuestionController` base refactor
+## 4. `QuestionController` base refactor ✅
 
 **File:** `src/models/quiz/question-controller.js`
 
@@ -275,7 +277,7 @@ quiz models. Quiz controllers still construct without errors.
 
 ---
 
-## 5. `PlayController` refactor
+## 5. `PlayController` refactor ✅
 
 **File:** `src/models/quiz/play-controller.js`
 
@@ -295,7 +297,7 @@ to `solutionEnd`. With animation OFF — candles cut to
 
 ---
 
-## 6. `EditController` refactor
+## 6. `EditController` refactor ✅
 
 **File:** `src/models/quiz/edit-controller.js`
 
@@ -313,7 +315,7 @@ the new range.
 
 ---
 
-## 7. `PreviewController` refactor
+## 7. `PreviewController` refactor ✅
 
 **File:** `src/models/quiz/preview-controller.js`
 
@@ -326,7 +328,7 @@ animate to `questionStartTime`, no answer recorded.
 
 ---
 
-## 8. Storage adapter no-ops
+## 8. Storage adapter no-ops ✅
 
 **File:** `src/models/quiz/question-save-load-adapters.js`
 
@@ -339,9 +341,9 @@ happens silently. Documented in `deferred.md`.
 
 ---
 
-## 9. Quiz SC widget (`QuizSuperChartWidget`)
+## 9. Quiz SC widget (`QuizSuperChartWidget`) ✅
 
-### 9.1 Create the widget
+### 9.1 Create the widget ✅
 
 **File (new):** `src/containers/trade/trading-terminal/widgets/super-chart/quiz/quiz-super-chart.js`
 
@@ -363,7 +365,7 @@ Per `design.md` section 2:
 - Mount the per-mode overlay wrappers (edit-drawings / play-drawings /
   preview-drawings).
 
-### 9.2 Rewire `QuizQuestionChart`
+### 9.2 Rewire `QuizQuestionChart` ✅
 
 **File:** `src/containers/quizzes/edit/quiz-question-chart.js`
 
@@ -384,9 +386,9 @@ candle.
 
 ---
 
-## 10. Port chart-bound quiz overlays
+## 10. Port chart-bound quiz overlays ✅
 
-### 10.1 `questions-timelines.js` (solution start/end vertical lines)
+### 10.1 `questions-timelines.js` (solution start/end vertical lines) ✅
 
 **File (new):** `src/containers/trade/trading-terminal/widgets/super-chart/quiz/questions-timelines.js`
 
@@ -400,7 +402,7 @@ candle.
   `quizSolutionEnd` (color keys already exist for TV — reuse the keys,
   resolved through `chartController.colors`).
 
-### 10.2 `decision-point-arrow.js`
+### 10.2 `decision-point-arrow.js` ✅
 
 **File (new):** `src/containers/trade/trading-terminal/widgets/super-chart/quiz/decision-point-arrow.js`
 
@@ -409,7 +411,7 @@ candle.
 - Use `simpleAnnotation` or a custom registered figure if needed.
 - Single overlay group, redraws on `solutionStart` change.
 
-### 10.3 Per-mode wrapper components
+### 10.3 Per-mode wrapper components ✅
 
 **Files (new):**
 - `src/containers/trade/trading-terminal/widgets/super-chart/quiz/edit-drawings.js`
@@ -434,7 +436,7 @@ play/preview modes.
 
 ---
 
-## 11. Quiz controls (Set Solution Start/End)
+## 11. Quiz controls (Set Solution Start/End) ✅
 
 **File (new):** `src/containers/trade/trading-terminal/widgets/super-chart/quiz/quiz-controls.js`
 
@@ -457,7 +459,7 @@ solution start updates and timeline overlay redraws. Same for End.
 
 ---
 
-## 12. Bg context-menu — Set Solution Start/End
+## 12. Bg context-menu — Set Solution Start/End ✅
 
 **File:** `src/containers/trade/trading-terminal/widgets/super-chart/controllers/context-menu-controller.js`
 
@@ -472,11 +474,11 @@ mode just like the sidebar button.
 
 ---
 
-## 13. Question model cleanup
+## 13. Question model cleanup ✅
 
 **File:** `src/models/quiz/question.js`
 
-### 13.1 Drawings/studies hooks → no-ops
+### 13.1 Drawings/studies hooks → no-ops ✅
 
 - `loadStudies`, `loadDrawings`, `refreshStudies`, `updateDrawingsTrigger`,
   `allDrawings` — these are read by the no-op adapter methods. Trim or
@@ -486,7 +488,7 @@ mode just like the sidebar button.
   computation) — keep, but inline the logic or import from a shared util
   rather than `DrawController` (which no longer exposes it).
 
-### 13.2 Drop per-question candle storage
+### 13.2 Drop per-question candle storage ✅
 
 Per `design.md` section 10. Backend still requires the `candles` field on
 the create/update payload — we satisfy it by leaving `candles: []` in
@@ -512,7 +514,7 @@ Editing an existing question still saves cleanly.
 
 ---
 
-## 14. Cleanup pass
+## 14. Cleanup pass ✅
 
 - Search for `MainChartTradingWidget`, `DefaultTradingWidget`,
   `GridBotTradingWidget`, `useTradingView`, `useTradingViewMarket`,
@@ -526,3 +528,79 @@ Editing an existing question still saves cleanly.
 **Verify:** webpack compiles. `/trade` and `/quizzes` both load. Quiz
 edit, preview, and play modes all work end-to-end (full review-doc
 checklist).
+
+---
+
+## 15. `ReplayController` quiz-facing engine delegates ✅
+
+`quiz/play/preview/draw` controllers call engine methods directly on
+`cc.replay` (bypassing the full `_startSession` flow). These were missing
+from `ReplayController`'s public surface.
+
+**File:** `src/containers/trade/trading-terminal/widgets/super-chart/controllers/replay-controller.js`
+
+Added five thin delegates:
+- `setCurrentTime(time, endTime)` → `_replayEngine.setCurrentTime`
+- `getReplayCurrentTime()` → `_replayEngine.getReplayCurrentTime()`
+- `getReplayStatus()` → `_replayEngine.getReplayStatus()`
+- `onReplayStatusChange(cb)` → `_replayEngine.onReplayStatusChange(cb)`
+- `playUntil(targetTime, speed)` → `_replayEngine.playUntil(targetTime, speed)`
+
+These do NOT go through Redux session state — they're the raw engine
+control surface that the quiz animation loop needs.
+
+**Verify:** preview mode loads a question into replay at `questionStartTime`
+without crashing on `setCurrentTime is not a function`. Play mode animation
+runs and stops at the correct candle.
+
+---
+
+## 16. `QuestionSyncController` — quiz chart symbol/period sync ✅
+
+**File (new):** `src/containers/trade/trading-terminal/widgets/super-chart/controllers/question-sync-controller.js`
+
+Handles the two-way sync between the quiz question's `coinraySymbol`/`resolution`
+state and what's loaded in SC. Also manages edit-mode VR focus after
+symbol/period/question changes.
+
+Key behaviours:
+
+- `syncSymbolToChart(coinraySymbol, resolution)` — pushes state→chart (echo-guarded).
+- `syncResolutionToChart(resolution)` — same for period-only changes.
+- `_scheduleEditFocusAfterLoad()` — called from `_onChartSymbolChange` and
+  `_onChartPeriodChange` (before the echo check, so it fires for both
+  user-initiated and state-driven changes). Subscribes one-shot to
+  `onVisibleRangeChange`; when SC resets the VR to latest candles after the
+  load completes, intercepts that reset and re-applies `editFocusRange`.
+- `focusEditQuestion()` — direct `setVisibleRange` for when the question
+  identity changes but symbol/resolution is unchanged (chart already loaded,
+  no VR change event needed).
+
+Wired in `QuizChart` (`quiz-super-chart.js`):
+- `useEffect([coinraySymbol])` → `syncSymbolToChart`
+- `useEffect([resolution])` → `syncResolutionToChart`
+- `useEffect([question?.id])` → `focusEditQuestion`
+
+**Verify:** edit mode — change symbol or resolution → chart loads new data
+and VR re-focuses on `editFocusRange` (not latest candle). Navigate between
+questions with same symbol/resolution → VR re-focuses on new question's
+`editFocusRange`. Editing timestamps on same question → no spurious VR reset.
+
+---
+
+## 17. `Question.editFocusRange` getter + Alt+R hotkey in edit mode ✅
+
+**`Question.editFocusRange`** — handles partial timestamp state:
+- Both set → delegates to `visibleTimeRange` (100% pad each side).
+- Only one set → 50-candle window around the set timestamp.
+- Neither set → `undefined` (falls through to SC's `resetView()`).
+
+**`chart-reset-hotkey.js`** — module-level `alt+R` binding (ref-counted,
+single binding across all chart instances). In quiz edit mode resolves via
+`c.quizOverlays._quizController` and uses `editFocusRange` for the focus
+target. Everywhere else delegates to `c._superchart.resetView()`.
+
+**Verify:** alt+R in edit mode with both timestamps set → chart focuses on
+the solution window. alt+R with only one timestamp set → 50-candle window
+around it. alt+R with no timestamps → `resetView()` (latest candle). alt+R
+in TT/CS/GridBot/charts → `resetView()` unaffected.

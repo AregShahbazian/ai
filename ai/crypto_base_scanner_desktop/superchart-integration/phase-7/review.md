@@ -46,31 +46,42 @@ boundary visually:
 
 #### Edit / New mode
 
-7. **Open `/quizzes/edit/<id>`.** Chart loads, period bar visible, no
-   replay controls panel visible.
+7. **Open `/quizzes/edit/<id>`.** Chart loads, period bar **hidden**
+   (existing question — symbol/resolution locked), no replay controls
+   panel visible.
 8. **Header in edit mode shows only Settings.** No Alert, no Buy, no
    Sell, no Replay.
 9. **Live ticks update the latest candle.** Wait 1 minute on a 1m
    resolution and watch the last candle update — the in-progress candle's
    close should change as live ticks arrive.
-10. **Click "Set Solution Start" sidebar button** → the button highlights
-    → click on the chart at a target time → `solutionStart` updates in
-    the form, the solution-start timeline overlay appears at that time
-    on the chart.
-11. **Click "Set Solution End" sidebar button** → same flow, solution-end
-    overlay appears.
+10. **Click "Set Solution Start" sidebar button** → the button text
+    turns brand-blue ("armed") → click on the chart at a target time →
+    `solutionStart` updates in the form, the solution-start timeline
+    overlay appears at that time on the chart, button returns to normal.
+11. **Click "Set Solution End" sidebar button** → same armed highlight
+    flow, solution-end overlay appears.
 12. **Bg context-menu in edit mode.** Right-click chart background →
     "Set Solution Start" and "Set Solution End" entries appear → click
     "Set Solution Start" → click on chart → same effect as #10.
 13. **Refresh ranges button** in the sidebar → chart re-centers on the
     current question's `visibleTimeRange`.
 14. **New question.** From an existing quiz, click "Add Question" →
-    routes to new-question form → chart mounts in `new` mode with the
-    same header/period-bar policy as `edit`.
-15. **Change question's symbol** in the form → chart re-mounts on the new
-    market, candles load.
-16. **Change question's resolution** in the form → chart switches to the
-    new resolution, candles reload.
+    routes to new-question form → chart mounts in `new` mode: period bar
+    **visible** (symbol/resolution can be changed), Settings button shown.
+15. **Change question's symbol** in the form (only available on new
+    questions) → chart reloads on the new market **and VR re-focuses on
+    `editFocusRange`** (not latest candle) when solution timestamps are
+    set. If no timestamps set, chart shows latest candles (default SC
+    behaviour).
+16. **Change question's resolution** in the form (only available on new
+    questions) → chart reloads at the new resolution **and VR re-focuses
+    on `editFocusRange`** when timestamps are set.
+16a. **Navigate between questions (same symbol/resolution).** Go from a
+    question with no timestamps to one with timestamps — chart
+    immediately re-focuses on that question's `editFocusRange`. Go the
+    other direction (timestamps → no timestamps) — chart shows latest
+    candles. Setting/changing timestamps on the active question does NOT
+    trigger a VR jump (only question identity change does).
 
 #### Play mode
 
@@ -135,12 +146,14 @@ boundary visually:
 #### Quiz overlays
 
 37. **Solution-start vertical line** appears at `solutionStart` time
-    when in edit/new/play/preview (where applicable). Colour matches the
-    pre-port `chartColors.quizSolutionStart`.
-38. **Solution-end vertical line** appears at `solutionEnd`. Colour
-    matches `chartColors.quizSolutionEnd`.
-39. **Decision-point arrow** appears at the decision point in the
-    relevant modes (visually identical to TV-prod placement).
+    in **edit and new modes only**. Play and preview modes do **not**
+    show timeline overlays (would spoil the question). Colour matches
+    the pre-port `chartColors.quizSolutionStart`.
+38. **Solution-end vertical line** appears at `solutionEnd` in edit/new
+    only. Colour matches `chartColors.quizSolutionEnd`.
+39. **Decision-point arrow** appears post-answer in play/preview (after
+    the answer is revealed), and is not shown during the question phase
+    (would reveal solutionStart).
 40. **Overlays clear on question change.** Move from question A to
     question B (different solution times) → A's lines/arrow disappear,
     B's appear.
@@ -228,3 +241,30 @@ boundary visually:
 61. **English / Dutch / Spanish quiz UI.** Switch language → all quiz
     UI strings (sidebar buttons, controls, modal text, header) appear
     correctly translated. No untranslated keys visible.
+
+#### Alt+R reset hotkey
+
+62. **Alt+R in edit mode, both timestamps set.** Press alt+R →
+    chart VR jumps to `editFocusRange` (100% pad on each side of the
+    `solutionStart`–`solutionEnd` window). Same result as the Refresh
+    Ranges button.
+63. **Alt+R in edit mode, only one timestamp set.** Press alt+R →
+    chart VR shows a 50-candle window centred on the set timestamp.
+64. **Alt+R in edit mode, no timestamps set.** Press alt+R →
+    `resetView()` fires (latest candle, default zoom). No crash.
+65. **Alt+R in TT / CS / GridBot / /charts.** Behaviour unchanged —
+    `resetView()` always fires. Quiz edit-mode branch is not active
+    outside `/quizzes`.
+66. **Alt+R in replay mode (TT).** `resetView()` targets the replay
+    buffer tail (latest drawn candle), not the live latest candle.
+
+#### Preview mode engine delegates
+
+67. **Open `/quizzes/edit/preview/<quizId>/<questionId>`.** Chart
+    enters replay mode at `questionStartTime` and animates to
+    `solutionStart` without a `setCurrentTime is not a function` crash.
+68. **`drawUntil` completes in preview.** Animation pauses exactly at
+    `solutionStart`; `_waitUntilPaused` resolves; no timeout or hang.
+69. **Play mode `playUntil` post-answer.** After submitting, candles
+    animate to `solutionEnd` and pause. `onReplayStatusChange` fires the
+    `paused` status exactly once, resolving `_waitUntilPaused`.

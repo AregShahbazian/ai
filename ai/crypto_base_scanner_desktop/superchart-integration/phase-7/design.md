@@ -469,23 +469,22 @@ method gets retargeted to `chartController.replay.playUntil`.
 
 ```js
 focusOnQuestion = async (question, prevQuestion) => {
-  const resolutionOrSymbolChanged =
+  const resolutionOrMarketChanged =
     question.coinraySymbol !== prevQuestion?.coinraySymbol ||
     question.resolution !== prevQuestion?.resolution
-  const questionChanged = question.id !== prevQuestion?.id
+  const questionHasChanged = question.id !== prevQuestion?.id
 
-  if (!questionChanged || resolutionOrSymbolChanged) {
-    this.refreshRanges(false)
+  if (!questionHasChanged || resolutionOrMarketChanged) {
+    this.refreshRanges()
   }
 }
 
-refreshRanges = (single = true) => {
-  const setRanges = () =>
-    this.quizController.draw.setVisibleRange(this.question.visibleTimeRange)
-  setRanges()
-  if (!single) util.wait(500).then(setRanges)
+refreshRanges = async () => {
+  await this.quizController.draw.setVisibleRange(this.question?.visibleTimeRange)
 }
 ```
+
+> **Implementation note:** the design originally had a `refreshRanges(false)` double-call (immediate + 500ms retry). The actual implementation is a single call — the retry was found unnecessary once `QuestionSyncController` handled VR focus for symbol/resolution changes (see §12a).
 
 `saveChartToServer` and `currentLayoutName` calls are removed (the methods
 on `DrawController` are no-ops now anyway).
@@ -506,6 +505,81 @@ drawQuestion = async ({question}) => {
 
 Preview always animates. If the user toggles animation OFF in preview,
 `drawUntil` gets a speed of `MAX_DRAWING_SPEED` (effectively a fast cut).
+
+---
+
+## 4a. `Question.editFocusRange` getter
+
+Used by the alt+R hotkey and `QuestionSyncController` to compute the edit-mode
+VR target, handling partial timestamp state:
+
+```js
+get editFocusRange() {
+  const start = this.solutionStart
+  const end   = this.solutionEnd
+  if (!start && !end) return undefined          // nothing set → resetView()
+  if (start && end)   return this.visibleTimeRange  // both set → full window
+  const anchor = start || end
+  const padMs  = resolutionToDuration(this.resolution) * 1000 * 50
+  return {from: anchor - padMs, to: anchor + padMs}  // one set → 50-candle pad
+}
+```
+
+`visibleTimeRange` pads 100% on each side of the `solutionStart`–`solutionEnd`
+spread (unchanged from TV-prod). `editFocusRange` delegates to it when both
+are set, so the two are identical in the normal case.
+
+---
+
+## 4b. `ReplayController` quiz-facing engine delegates
+
+Quiz draw/play/preview controllers call engine methods directly on `cc.replay`
+to control the SC replay engine without going through the full `_startSession`
+Redux session flow. These are thin delegates in `ReplayController`:
+
+```js
+setCurrentTime = async (time, endTime) => { ... }   // null → reset engine
+getReplayCurrentTime = () => { ... }
+getReplayStatus = () => { ... }
+onReplayStatusChange = (cb) => { ... }               // returns unsubscribe
+playUntil = (targetTime, speed) => { ... }
+```
+
+They deliberately bypass Redux state (`setReplayMode`, `_setSession`) — the
+quiz animation loop is not a user-visible replay session.
+
+---
+
+## 4c. `QuestionSyncController` — quiz chart symbol/period sync ✅
+
+**File:** `src/containers/trade/trading-terminal/widgets/super-chart/controllers/question-sync-controller.js`
+
+Quiz analog of `MarketTabSyncController`. Manages:
+
+1. **State→chart sync** (`syncSymbolToChart`, `syncResolutionToChart`) — echo-guarded
+   to prevent SC's change events from writing back to the question.
+
+2. **VR re-focus after load** (`_scheduleEditFocusAfterLoad`) — called from
+   `_onChartSymbolChange` / `_onChartPeriodChange` before the echo guard. SC
+   fires these events after it finishes loading the new data and resets VR to
+   latest candles. The method subscribes one-shot to `onVisibleRangeChange`:
+   when SC's own reset fires it, the callback immediately calls `setVisibleRange`
+   with `editFocusRange`. This handles both user-initiated and
+   state-driven symbol/resolution changes.
+
+3. **VR re-focus on question identity change** (`focusEditQuestion`) — called
+   directly from `QuizChart`'s `useEffect([question?.id])`. Fires when navigating
+   between questions that share the same symbol/resolution (no chart reload,
+   no VR event). Calls `setVisibleRange` directly.
+
+The `QuizChart` component in `quiz-super-chart.js` wires three effects:
+```js
+useEffect([coinraySymbol]) → questionSync.syncSymbolToChart(coinraySymbol, resolution)
+useEffect([resolution])    → questionSync.syncResolutionToChart(resolution)
+useEffect([question?.id])  → questionSync.focusEditQuestion()
+```
+The `question?.id` dep prevents timestamp edits on the same question from
+triggering a VR jump (only identity change triggers it).
 
 ---
 
