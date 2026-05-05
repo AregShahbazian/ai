@@ -5,28 +5,6 @@ follow-up PRD when the blocker resolves.
 
 ---
 
-## Default replay session in quiz edit mode
-
-**What it is.** In TV-prod, opening edit mode auto-starts a default replay
-session pinned at `now`. The effect: the live WebSocket subscription stops
-mutating the in-progress latest candle, so the chart shows a stable snapshot
-the creator can place `solutionStart` / `solutionEnd` markers on without the
-candle wiggling underneath. This was removed from the SC branch when TV
-replay was decommissioned.
-
-**Why deferred.** Not a blocker for the rest of the quiz port — edit mode
-works without it, just with a live latest candle. Re-enabling needs a
-deliberate session lifecycle (open on edit-mode entry, close on exit, handle
-symbol/resolution changes, handle the user picking a question whose
-`questionStartTime > now`).
-
-**Blockers.** None — Phase 5 replay engine is shipped. Pure Altrady-side
-sequencing work.
-
-**Placeholder.** None needed. Edit mode simply does not call `setCurrentTime`.
-
----
-
 ## User drawings capture in edit mode
 
 **What it is.** When a quiz creator draws on the chart (trendlines, rays,

@@ -1,8 +1,8 @@
 # Superchart API Reference
 
 > Source: `$SUPERCHART_DIR` (branch: main)
-> Superchart git hash: `42d90ae95bdf1d8d1fa25c7f48a9d21044ab4009`
-> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `c99a96fa8a554bc8a6e9a7fe3fecb655ec6c5b52`
+> Superchart git hash: `12e80deeeaf17476029f20be35137849ef8a43bc`
+> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `a502c7c910534d8375112f51a656a427bf09c09d`
 > Do NOT explore source — use this doc instead.
 
 ## Multi-instance support
@@ -39,6 +39,28 @@ registerOverlay         — Register custom overlay type (call before new Superc
 registerFigure          — Register custom figure primitive (canvas shape)
 registerIndicator       — Register custom indicator template
 DEFAULT_OVERLAY_PROPERTIES — Default overlay styling constants
+
+// setVisibleRange / resetView errors (new in 12e80de)
+SetVisibleRangeError    — error class thrown by setVisibleRange / resetView
+SetVisibleRangeErrorCode — 'no_data_at_time' | 'unsupported_resolution' | 'aborted'
+isSetVisibleRangeError  — type guard: (e: unknown) => e is SetVisibleRangeError
+
+// Storage utilities (new in 8c245a1)
+LocalStorageAdapter     — Bundled localStorage-backed StorageAdapter
+HttpStorageAdapter      — Bundled HTTP-backed StorageAdapter
+StorageConflictError    — Thrown by adapters on optimistic-concurrency conflict
+CHART_STATE_VERSION     — Current schema version constant (number)
+createEmptyChartState   — () => ChartState
+migrateChartState       — (unknown) => ChartState | null
+mergeChartStates        — (local, remote: ChartState) => ChartState
+
+// Templates (new in 8c245a1)
+SYSTEM_STUDY_TEMPLATES  — Read-only bundled study template presets (5 entries)
+SYSTEM_DRAWING_TEMPLATES — Read-only bundled drawing template presets (4 entries)
+
+// Feature flags (new in 8c245a1)
+FEATURE_DEFAULTS        — Record<FeatureFlag, boolean> — all flags with their defaults
+useFeature              — React hook: useFeature(flag: FeatureFlag): boolean
 ```
 
 Also re-exports klinecharts core types: `Chart`, `Nullable`, `DeepPartial`, `KLineData`,
@@ -48,11 +70,18 @@ Also re-exports klinecharts core types: `Chart`, `Nullable`, `DeepPartial`, `KLi
 Also re-exports Superchart-specific types: `SuperchartOptions`, `SuperchartApi`, `VisibleTimeRange`,
 `PriceTimeResult`, `ToolbarButtonOptions`, `ToolbarDropdownOptions`, `ToolbarDropdownItem`,
 `ToolbarDropdownActionItem`, `ToolbarDropdownSeparator`, `Period`, `SymbolInfo`,
-`StorageAdapter`, `ChartState`, `IndicatorProvider`, `OverlayProperties`, `Datafeed`,
+`StorageAdapter`, `ChartState`, `StorageRecord`, `StorageWriteResult`, `StorageEntry`,
+`StudyTemplate`, `StudyTemplateMeta`, `DrawingTemplate`, `DrawingTemplateMeta`,
+`SavedIndicator`, `ChartPreferences`,
+`IndicatorProvider`, `OverlayProperties`, `Datafeed`,
 `Bar`, `PeriodParams`, `HistoryMetadata`, `OrderLine`, `OrderLineProperties`,
 `PriceLine`, `PriceLineProperties`, `PriceLineEventListener`,
 `TradeLine`, `TradeLineProperties`,
-`ScriptProvider`, `PaneProperties`, `SuperchartDataLoader`, `LibrarySymbolInfo`.
+`ScriptProvider`, `PaneProperties`, `SuperchartDataLoader`, `LibrarySymbolInfo`,
+`FeatureFlag`,
+`LocalStorageAdapterOptions`, `HttpStorageAdapterOptions`,
+`ToolbarButtonOptions`, `ToolbarDropdownOptions`, `ToolbarDropdownItem`,
+`ToolbarDropdownActionItem`, `ToolbarDropdownSeparator`.
 
 ## SuperchartOptions (constructor)
 
@@ -68,6 +97,10 @@ Also re-exports Superchart-specific types: `SuperchartOptions`, `SuperchartApi`,
   indicatorProvider?: IndicatorProvider
   storageAdapter?: StorageAdapter
   storageKey?: string                   // default: symbol.ticker
+  onStorageError?: (err: Error) => void // fired after 3 failed merge-retries
+  autoSaveDelay?: number                // debounce ms before writing; 0 = immediate (default)
+  enabledFeatures?: FeatureFlag[]       // feature flags to enable (see Feature Flags section)
+  disabledFeatures?: FeatureFlag[]      // feature flags to disable; wins over enabledFeatures
   mainIndicators?: string[]
   subIndicators?: string[]
   locale?: string                       // default: 'en-US'
@@ -112,7 +145,8 @@ getPeriod(): Period
 getChart(): Nullable<Chart>                    // klinecharts Chart instance
 resize(): void
 getScreenshotUrl(type?: 'png' | 'jpeg', backgroundColor?: string): string
-createOverlay(overlay: OverlayCreate & { properties?: DeepPartial<OverlayProperties> }, paneId?: string): string | null
+createOverlay(overlay: OverlayCreate & { properties?: DeepPartial<OverlayProperties>; save?: boolean }, paneId?: string): string | null
+// save: false → transient overlay — renders but is never written to StorageAdapter or restored on reload
 setOverlayMode(mode: OverlayMode): void
 getBackendIndicators(): UseBackendIndicatorsReturn | null
 openScriptEditor(options?: { initialCode?: string; readOnly?: boolean }): void
@@ -128,11 +162,27 @@ onSelect(callback: (result: PriceTimeResult) => void): () => void              /
 onRightSelect(callback: (result: PriceTimeResult) => void): () => void         // returns unsubscribe
 onDoubleSelect(callback: (result: PriceTimeResult) => void): () => void        // returns unsubscribe
 onReady(callback: () => void): () => void          // fires immediately if already ready; returns unsubscribe
-setVisibleRange(range: VisibleTimeRange): void    // scroll/zoom to show {from, to} (unix seconds)
+setVisibleRange(range: VisibleTimeRange): Promise<void>
+// Async. Waits for chart ready. VisibleTimeRange uses unix SECONDS.
+// Fetches missing history via dataLoader.getRange if range.from is before loaded data.
+// Queued during init load; latest call wins. Throws SetVisibleRangeError on failure.
+resetView(): Promise<void>
+// Async. Resets bar space and offset-right to defaults (10px bar, 80px right offset).
+// Queued during init load; latest call wins.
 readonly replay: ReplayEngine | null           // null until chart mounts; reading also installs internal error→period-sync
 dispose(): void
 destroy(): void                                // alias for dispose()
 getOptions(): SuperchartOptions
+
+// Storage (no-ops when no storageAdapter configured)
+saveState(): Promise<void>                         // force-save, last-write-wins
+loadState(): Promise<void>                         // re-fetch and re-apply from adapter
+clearState(): Promise<void>                        // delete remote record; chart visual unchanged
+listSavedStates(prefix?: string): Promise<StorageEntry[]>
+
+// Feature flags
+isFeatureEnabled(flag: FeatureFlag): boolean
+setFeatureEnabled(flag: FeatureFlag, enabled: boolean): void  // triggers live re-render
 ```
 
 ## Datafeed Interface
@@ -170,13 +220,14 @@ interface SuperchartDataLoader extends DataLoader {
   getConfiguration(): DatafeedConfiguration | null
   setOnBarsLoaded(callback: (fromMs: number) => void): void
 
-  // Internal — used by ReplayEngine. getBars is called with countBack: 0, so
-  // your Datafeed.getBars implementation must honour `from` in that path.
-  getRange(params: {
+  // Used by ReplayEngine AND by setVisibleRange history-fetch (both pass countBack: 0).
+  // Timestamps are unix ms. Optional — if absent, setVisibleRange skips backward
+  // history fetch (only applies range if already in buffer) and replay buffer will be empty.
+  getRange?(params: {
     symbol: SymbolInfo, period: Period,
     from: number, to: number,
     callback: (bars: KLineData[]) => void
-  }): void
+  }): void | Promise<void>
 
   // Present only if Datafeed.getFirstCandleTime is defined.
   getFirstCandleTime?: (params: {
@@ -326,32 +377,164 @@ hiding/disabling without removing the whole bar. Custom buttons added via
 
 ### StorageAdapter
 ```typescript
-{
-  save(key: string, state: ChartState): Promise<void>
-  load(key: string): Promise<ChartState | null>
-  delete(key: string): Promise<void>
-  list?(prefix?: string): Promise<string[]>
+interface StorageAdapter {
+  // Core (all required except list)
+  load(key: string): Promise<StorageRecord | null>
+  save(key: string, state: ChartState, expectedRevision?: number): Promise<StorageWriteResult>
+  // save without expectedRevision → last-write-wins.
+  // save with expectedRevision → adapter must throw StorageConflictError if stored revision differs.
+  delete(key: string): Promise<void>   // 404 must be treated as success
+  list?(prefix?: string): Promise<StorageEntry[]>
+
+  // Study templates (all optional — UI hidden when any is missing)
+  listStudyTemplates?(indicatorName?: string): Promise<StudyTemplateMeta[]>
+  loadStudyTemplate?(name: string): Promise<StudyTemplate | null>
+  saveStudyTemplate?(name: string, template: StudyTemplate): Promise<void>
+  deleteStudyTemplate?(name: string): Promise<void>  // system names must throw / 403
+
+  // Drawing templates (all optional — UI hidden when any is missing)
+  listDrawingTemplates?(toolName: string): Promise<DrawingTemplateMeta[]>
+  loadDrawingTemplate?(toolName: string, name: string): Promise<DrawingTemplate | null>
+  saveDrawingTemplate?(toolName: string, name: string, template: DrawingTemplate): Promise<void>
+  deleteDrawingTemplate?(toolName: string, name: string): Promise<void>  // system names must throw / 403
 }
 ```
 
+### StorageRecord
+```typescript
+interface StorageRecord { state: ChartState; revision: number }
+```
+
+### StorageWriteResult
+```typescript
+interface StorageWriteResult { revision: number }
+```
+
+### StorageEntry
+```typescript
+interface StorageEntry { key: string; revision: number; savedAt?: number; symbol?: string; period?: string }
+```
+
+### StorageConflictError
+```typescript
+class StorageConflictError extends Error {
+  remoteState: ChartState
+  remoteRevision: number
+  constructor(remoteState: ChartState, remoteRevision: number, message?: string)
+}
+```
+Thrown by adapters when `expectedRevision` is stale. SC catches this internally and runs a merge-retry loop (up to 3 attempts). After 3 failures calls `onStorageError` and re-throws. Consumers only see it via `onStorageError`.
+
+### LocalStorageAdapter
+```typescript
+class LocalStorageAdapter implements StorageAdapter {
+  constructor(options?: LocalStorageAdapterOptions)
+}
+interface LocalStorageAdapterOptions {
+  prefix?: string    // key prefix, default 'superchart:'
+  storage?: Storage  // override for test / non-browser environments
+}
+```
+Stores chart state at `${prefix}${key}`. Study templates at `${prefix}study-template:${name}`. Drawing templates at `${prefix}drawing-template:${toolName}:${name}`. Merges `SYSTEM_STUDY_TEMPLATES` / `SYSTEM_DRAWING_TEMPLATES` into list responses. Saving over a system name creates a user copy that shadows it; deleting a pure system name throws.
+
+### HttpStorageAdapter
+```typescript
+class HttpStorageAdapter implements StorageAdapter {
+  constructor(options: HttpStorageAdapterOptions)
+}
+interface HttpStorageAdapterOptions {
+  baseUrl: string                           // e.g. '/api/chart-state' — no trailing slash
+  headers?: () => Record<string, string>   // re-evaluated per request (for auth tokens)
+  fetch?: typeof fetch                     // override for test / non-browser
+}
+```
+REST contract rooted at `baseUrl`:
+- `GET {baseUrl}/{key}` → 200 `{state, revision}` | 404
+- `PUT {baseUrl}/{key}` body `{state}`, optional header `If-Match: <revision>` → 200 `{revision}` | 409 `{remoteState, remoteRevision}`
+- `DELETE {baseUrl}/{key}` → 204 | 404 (treated as success)
+- `GET {baseUrl}[?prefix=…]` → 200 `StorageEntry[]`
+
+Study templates at `{baseUrl-parent}/study-templates`, drawing templates at `{baseUrl-parent}/drawing-templates/:toolName`. System names return 403 on delete.
+
 ### ChartState
 ```typescript
-{
-  version: number, indicators: SavedIndicator[], overlays: SavedOverlay[],
-  styles: DeepPartial<Styles>, paneLayout: PaneLayout[],
-  preferences: ChartPreferences, savedAt?: number, symbol?: string, period?: string,
+interface ChartState {
+  version: number                   // schema version (currently 1); separate from StorageRecord.revision
+  indicators: SavedIndicator[]
+  overlays: SavedOverlay[]
+  styles: DeepPartial<Styles>
+  paneLayout: PaneLayout[]
+  preferences: ChartPreferences
+  savedAt?: number
+  symbol?: string
+  period?: string
   overlayDefaults?: Record<string, DeepPartial<OverlayProperties>>
 }
 ```
 
 ### ChartPreferences
 ```typescript
-{
-  showVolume: boolean, showCrosshair: boolean, showGrid: boolean,
-  showLegend: boolean, magnetMode: 'normal'|'weak'|'strong',
-  timezone?: string, locale?: string
+interface ChartPreferences {
+  showVolume: boolean
+  showCrosshair: boolean
+  showGrid: boolean
+  showLegend: boolean
+  magnetMode: 'normal' | 'weak' | 'strong'
+  timezone?: string
+  locale?: string
 }
 ```
+
+### SavedIndicator
+```typescript
+interface SavedIndicator {
+  id: string
+  name: string           // indicator type name e.g. "RSI", "MACD"
+  paneId: string
+  calcParams?: unknown[] // built-in indicators
+  settings?: Record<string, SettingValue>  // backend indicators only
+  visible: boolean
+  isStack?: boolean
+  paneOptions?: PaneOptions
+  styles?: Record<string, unknown>
+}
+// type SettingValue = number | boolean | string
+```
+Backend indicators are identified by having `settings` and no `calcParams`.
+
+### StudyTemplateMeta / StudyTemplate
+```typescript
+interface StudyTemplateMeta {
+  name: string
+  indicatorName: string
+  system?: boolean     // true = bundled read-only preset
+  savedAt?: number
+}
+interface StudyTemplate extends StudyTemplateMeta {
+  calcParams?: unknown[]
+  settings?: Record<string, SettingValue>
+  styles?: Record<string, unknown>
+}
+```
+`SYSTEM_STUDY_TEMPLATES`: 5 bundled presets (RSI 14, MACD 12/26/9, EMA 50, EMA 200, BOLL 20).
+UI shown when: `study_templates` feature flag is `true` AND adapter implements all 4 study-template methods.
+
+### DrawingTemplateMeta / DrawingTemplate
+```typescript
+interface DrawingTemplateMeta {
+  name: string
+  toolName: string    // e.g. 'trendLine', 'fibSegment', 'horizontalRayLine'
+  system?: boolean
+  savedAt?: number
+}
+interface DrawingTemplate extends DrawingTemplateMeta {
+  properties?: Record<string, unknown>
+  figureStyles?: Record<string, Record<string, unknown>>
+}
+```
+Composite key is `(toolName, name)` — independent per tool.
+`SYSTEM_DRAWING_TEMPLATES`: 4 presets (Bullish trendline, Bearish trendline, Support line, Resistance line).
+UI shown when: `drawing_templates` feature flag is `true` AND adapter implements all 4 drawing-template methods.
 
 ### OverlayProperties
 ```typescript
@@ -365,6 +548,58 @@ hiding/disabling without removing the whole bar. Custom buttons added via
 { getAvailableIndicators(), subscribe(params), updateSettings(id, settings),
   unsubscribe(id), onSymbolPeriodChange?(symbol, period, active), dispose?() }
 ```
+
+### SetVisibleRangeError (new in 12e80de)
+```typescript
+type SetVisibleRangeErrorCode = 'no_data_at_time' | 'unsupported_resolution' | 'aborted'
+
+interface SetVisibleRangeError extends Error {
+  name: 'SetVisibleRangeError'
+  code: SetVisibleRangeErrorCode
+  detail: unknown
+}
+
+function isSetVisibleRangeError(e: unknown): e is SetVisibleRangeError
+```
+
+Error codes:
+- `'no_data_at_time'` — `range.from` is before symbol's first candle. `detail: { timestamp, firstCandleTime, period }`.
+- `'unsupported_resolution'` — second-resolution or unsupported period. `detail: { period }`.
+- `'aborted'` — pending queued call cancelled because chart was destroyed. `detail: { reason: 'chart_destroyed' }`. Safe to ignore on unmount.
+
+### FeatureFlag
+```typescript
+type FeatureFlag =
+  | 'drawing_bar'         // default true
+  | 'period_bar'          // default true
+  | 'screenshot_button'   // default true
+  | 'fullscreen_button'   // default true
+  | 'symbol_search'       // default true
+  | 'period_picker'       // default true
+  | 'indicator_picker'    // default true
+  | 'right_click_menu'    // default true
+  | 'longpress_menu'      // default true
+  | 'crosshair_magnet'    // default false
+  | 'auto_save_state'     // default true — when false, no adapter writes; must call saveState() manually
+  | 'study_templates'     // default true — UI shown when adapter also implements all 4 study template methods
+  | 'drawing_templates'   // default true — UI shown when adapter also implements all 4 drawing template methods
+  | 'chart_templates'     // default true (reserved)
+  | 'multi_chart_browser' // default true (reserved)
+  | 'volume_in_legend'    // default true
+  | 'last_close_price_line' // default true
+```
+`disabledFeatures` wins over `enabledFeatures` when a flag appears in both.
+`drawing_bar` / `period_bar` flags control availability (binary); `drawingBarVisible` / `periodBarVisible` options control current visibility state (user-toggleable). Toolbar shows only when flag is `true` AND visibility is `true`.
+
+### FEATURE_DEFAULTS
+`Record<FeatureFlag, boolean>` — complete defaults map. Import to inspect defaults without constructing a chart.
+
+### useFeature (React hook)
+```typescript
+import { useFeature } from 'superchart'
+const enabled: boolean = useFeature('drawing_bar')
+```
+Re-renders the consuming component when `setFeatureEnabled` toggles the flag.
 
 ### createOrderLine
 
@@ -624,6 +859,7 @@ unsubscribeAction(type: ActionType, callback?): void
 // ActionType: 'onZoom' | 'onScroll' | 'onVisibleRangeChange' | 'onCandleTooltipFeatureClick'
 //           | 'onIndicatorTooltipFeatureClick' | 'onCrosshairFeatureClick' | 'onCrosshairChange'
 //           | 'onCandleBarClick' | 'onChartClick' | 'onChartRightClick' | 'onChartDoubleClick' | 'onPaneDrag'
+//           | 'onInitLoadComplete'   ← fires when the initial getBars load finishes; drains setVisibleRange queue
 // onChartClick / onChartRightClick / onChartDoubleClick only fire on MAIN widget clicks
 // that were NOT consumed by an overlay. Payload: { x, y, timestamp, ...crosshair }
 
@@ -810,6 +1046,36 @@ No constructor option, callback, or event to disable, hide, or override the scre
 To replace the built-in screenshot behavior with custom logic (e.g., upload + share modal), the SC library needs a new option. Possible API additions:
 - `onScreenshot?: (url: string) => void` callback in `SuperchartOptions` — if provided, called instead of opening the built-in modal
 - `disableScreenshot?: boolean` in `SuperchartOptions` — hides the button so consumer can add their own via `createButton`
+
+## setVisibleRange / resetView Notes (12e80de)
+
+- Both methods are now `async` and return `Promise<void>`. Always `await` them or handle the rejection.
+- `setVisibleRange` uses `VisibleTimeRange` (unix **seconds**). The coinray-chart layer takes ms — the Superchart wrapper multiplies by 1000 automatically.
+- Both are safe to call before the chart is ready — they wait for `onReady` internally.
+- Both are queued during an in-flight init load. Only the latest queued call is applied when the load completes; earlier queued calls resolve without effect.
+- `setVisibleRange` fetches missing history backward via `dataLoader.getRange` if `range.from` is before the loaded buffer. Requires `getRange` to be present on the DataLoader (see `SuperchartDataLoader` above).
+- The `last_bar` zoom anchor is now clamped to the viewport — zooming while scrolled left no longer jumps the viewport. No API change, just a behavioral fix.
+- **`SuperchartApi` interface gap**: `setVisibleRange` and `resetView` exist on the `Superchart` class but are not yet declared on the `SuperchartApi` interface. Code that holds a `SuperchartApi`-typed reference cannot call them without a cast. Reported to SC dev.
+
+## useBackendIndicators — New Methods (8c245a1)
+
+### `getActiveIndicatorByKlinechartsName`
+```typescript
+getActiveIndicatorByKlinechartsName(klineName: string): ActiveIndicator | undefined
+```
+Reverse-lookup from a klinecharts template name (format `BACKEND_<indicatorId>`) to the `ActiveIndicator`. Needed when klinecharts tooltip events report only the template name and you need the original backend indicator.
+
+### `onHistory` on `IndicatorSubscription`
+```typescript
+subscription.onHistory?.((points: IndicatorDataPoint[]) => void)
+```
+Optional handler. Fires with historical backfill data. Unlike `onData` (which clears the store first), `onHistory` merges into the existing data store — preserving live data received before the backfill arrives.
+
+## Overlay `save` field (8c245a1)
+
+`createOverlay` now accepts `save?: boolean` (default `true`). Set `save: false` for transient overlays that should render on the chart but never be written to the `StorageAdapter` or restored on reload. Mirrors TradingView's `disableSave`.
+
+Altrady note: All fluent-factory overlays (`createOrderLine`, `createPriceLine`, `createTradeLine`) never save by design — they bypass SC's overlay lifecycle entirely. Any new `superchart.createOverlay(...)` calls for app-driven transient overlays (e.g. replay cursor, measurement tool) should pass `{ save: false }`.
 
 ## Known Limitations
 

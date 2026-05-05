@@ -1,8 +1,8 @@
 # Superchart Usage Patterns
 
 > Source: `$SUPERCHART_DIR` (example app + source, branch: main)
-> Superchart git hash: `42d90ae95bdf1d8d1fa25c7f48a9d21044ab4009`
-> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `c99a96fa8a554bc8a6e9a7fe3fecb655ec6c5b52`
+> Superchart git hash: `12e80deeeaf17476029f20be35137849ef8a43bc`
+> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `a502c7c910534d8375112f51a656a427bf09c09d`
 > Do NOT explore source — use this doc instead.
 
 ## Multi-instance
@@ -192,21 +192,100 @@ chart.getChart().overrideOverlay({ id: overlayId, lock: true })
 
 ## Storage/Persistence
 
-```javascript
-const storageAdapter = {
-  async save(key, state) { await db.chartStates.put({ key, ...state }) },
-  async load(key) { return await db.chartStates.get(key) || null },
-  async delete(key) { await db.chartStates.delete(key) },
-}
+### Bundled adapters (new in 8c245a1)
 
-new Superchart({
-  ...,
-  storageAdapter,
-  storageKey: `${coinraySymbol}_${resolution}`,
+```javascript
+import { LocalStorageAdapter, HttpStorageAdapter } from 'superchart'
+
+// localStorage-backed (dev / small data)
+const storageAdapter = new LocalStorageAdapter({ prefix: 'altrady:' })
+
+// HTTP-backed (production)
+const storageAdapter = new HttpStorageAdapter({
+  baseUrl: '/api/chart-state',
+  headers: () => ({ Authorization: `Bearer ${getToken()}` }),
 })
 ```
 
-State is auto-saved on indicator/overlay/preference changes.
+### Custom adapter (minimal, last-write-wins)
+
+```javascript
+const storageAdapter = {
+  async load(key) { return await db.chartStates.get(key) || null },
+  async save(key, state) {
+    await db.chartStates.put({ key, ...state })
+    return { revision: Date.now() }   // return StorageWriteResult
+  },
+  async delete(key) { await db.chartStates.delete(key) },
+}
+```
+
+### Custom adapter (with optimistic concurrency)
+
+Implement `expectedRevision` to prevent clobbering concurrent saves:
+
+```javascript
+async save(key, state, expectedRevision) {
+  const existing = await db.get(key)
+  if (expectedRevision !== undefined && existing?.revision !== expectedRevision) {
+    throw new StorageConflictError(existing.state, existing.revision)
+  }
+  const revision = (existing?.revision ?? 0) + 1
+  await db.put({ key, state, revision })
+  return { revision }
+}
+```
+
+SC catches `StorageConflictError` internally, merges states, and retries up to 3 times. After 3 failures it calls `onStorageError` and re-throws.
+
+### Wiring to Superchart
+
+```javascript
+new Superchart({
+  ...,
+  storageAdapter,
+  storageKey: `${coinraySymbol}_${resolution}`,  // default: symbol.ticker
+  onStorageError: (err) => dispatch(showErrorToast(err.message)),
+  autoSaveDelay: 500,   // collapse rapid drawing edits into one save per 500ms
+})
+```
+
+State is auto-saved on indicator/overlay/preference changes. Disable auto-save with `disabledFeatures: ['auto_save_state']` and call `sc.saveState()` explicitly.
+
+### Imperative API
+
+```javascript
+await sc.saveState()                          // force-save now
+await sc.loadState()                          // re-fetch and re-apply from adapter
+await sc.clearState()                         // delete remote record; chart unchanged
+const entries = await sc.listSavedStates()    // list all saved keys
+```
+
+All four are no-ops when no `storageAdapter` is configured.
+
+### Study / Drawing templates
+
+Shown in indicator settings modal and overlay floating settings when the adapter implements the optional template methods:
+
+```javascript
+const storageAdapter = {
+  // ... core methods ...
+
+  // Study templates (all 4 required to enable UI)
+  async listStudyTemplates(indicatorName) { return [] },
+  async loadStudyTemplate(name) { return null },
+  async saveStudyTemplate(name, template) { /* persist */ },
+  async deleteStudyTemplate(name) { /* delete */ },
+
+  // Drawing templates (all 4 required to enable UI)
+  async listDrawingTemplates(toolName) { return [] },
+  async loadDrawingTemplate(toolName, name) { return null },
+  async saveDrawingTemplate(toolName, name, template) { /* persist */ },
+  async deleteDrawingTemplate(toolName, name) { /* delete */ },
+}
+```
+
+To include the bundled system presets in your list responses, merge `SYSTEM_STUDY_TEMPLATES` / `SYSTEM_DRAWING_TEMPLATES` into the returned arrays. Hide these features with `disabledFeatures: ['study_templates', 'drawing_templates']`.
 
 ## Toolbar Customization
 
@@ -278,6 +357,31 @@ to viewport edges via `extendData: { extendLeft: true, extendRight: false }`.
 
 Pass `debug: false` in constructor options to silence non-essential `console.log` calls.
 Default is `true`. All internal logs go through the `log()` utility which checks this flag.
+
+## setVisibleRange / resetView (async — 12e80de)
+
+Both methods are now async. Always await them and handle `SetVisibleRangeError`.
+
+```javascript
+import { isSetVisibleRangeError } from 'superchart'
+
+// Scroll/zoom to a specific time range (unix seconds)
+try {
+  await sc.setVisibleRange({ from: question.solutionStart / 1000, to: question.solutionEnd / 1000 })
+} catch (e) {
+  if (isSetVisibleRangeError(e)) {
+    if (e.code === 'no_data_at_time') showToast('No data at this time')
+    if (e.code === 'aborted') { /* chart unmounted — ignore */ }
+  }
+}
+
+// Reset to default zoom (live view, default bar space)
+await sc.resetView()
+```
+
+Both calls are safe before the chart is ready — they wait for `onReady` internally. Both are also safe during an init load — they queue and drain when the load completes (latest call wins).
+
+`setVisibleRange` fetches missing history backward if `range.from` is before the loaded data buffer. This requires `dataLoader.getRange` to be present (it is, via `createDataLoader`).
 
 ## Replay Engine Usage
 
@@ -385,6 +489,44 @@ getFirstCandleTime(symbolName, resolution, callback) {
 - Alert triggers based on chart price
 - Provide a visible "Exit Replay" / "Go Live" button that calls `sc.replay.setCurrentTime(null)`
 
+## Feature Flags
+
+Control which SC UI features are available at construction time:
+
+```javascript
+new Superchart({
+  ...,
+  enabledFeatures:  ['crosshair_magnet'],
+  disabledFeatures: ['study_templates', 'drawing_templates', 'chart_templates',
+                     'multi_chart_browser', 'auto_save_state'],
+})
+```
+
+`disabledFeatures` wins when a flag appears in both lists. Toggle at runtime:
+
+```javascript
+sc.setFeatureEnabled('crosshair_magnet', true)
+sc.isFeatureEnabled('drawing_bar')  // → boolean
+```
+
+React components inside SC re-render automatically via `useFeature` when a flag changes. See `SUPERCHART_API.md → FeatureFlag` for all flags and defaults.
+
+**Altrady note:** Disable `study_templates`, `drawing_templates`, `chart_templates`, and `multi_chart_browser` until those features are wired to the Altrady backend. Disable `auto_save_state` if manual save control is required (then call `sc.saveState()` explicitly).
+
+## Transient Overlays (`save: false`)
+
+Overlays created with `save: false` render on the chart but are never written to the `StorageAdapter` and are not restored on reload:
+
+```javascript
+sc.createOverlay({
+  name: 'timeLine',
+  points: [{ timestamp: replayCurrentTime, value: 0 }],
+  save: false,   // transient — not persisted
+})
+```
+
+All Altrady app-driven overlays (order lines, price lines, trade lines via the fluent factories) never save by design — they bypass SC's overlay lifecycle. Any new `createOverlay` calls for replay markers, measurement tools, or other app-managed transient overlays should pass `{ save: false }`.
+
 ## Cleanup Pattern
 
 ```javascript
@@ -485,3 +627,15 @@ klinecharts `dispose()`, remove CSS classes, reset store. `destroy()` is an alia
     populate the exchange filter tabs in the built-in symbol-search modal. If
     application code needs those filter lists (e.g. a custom picker), read them
     from `getConfiguration()` after `onReady` has fired — returns `null` before.
+
+19. **`setVisibleRange` and `resetView` are now async** (12e80de): Both return
+    `Promise<void>`. Fire-and-forget calls that previously worked silently will now
+    swallow errors. Always `await` them inside an async function or attach `.catch()`.
+    On component unmount, a queued call rejects with `code: 'aborted'` — that is safe
+    to ignore. Wrap with `isSetVisibleRangeError` to distinguish it from real errors.
+
+20. **`setVisibleRange` may trigger a network fetch**: If `range.from` is before the
+    loaded data buffer, SC calls `dataLoader.getRange` to fetch missing history. The
+    call is therefore not instant even when the chart is already ready. Do not assume
+    the chart has scrolled to the target range synchronously after `await` — the
+    promise resolves only after the fetch completes and the range is applied.
