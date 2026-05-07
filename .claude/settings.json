@@ -12,6 +12,5 @@
       }
     ]
   },
-  "effortLevel": "medium",
-  "model": "sonnet"
+  "effortLevel": "high"
 }

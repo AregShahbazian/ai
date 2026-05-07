@@ -3,83 +3,64 @@
 Items excluded from `prd.md` (the `sc-quiz` core port). Each becomes its own
 follow-up PRD when the blocker resolves.
 
----
-
-## User drawings capture in edit mode
-
-**What it is.** When a quiz creator draws on the chart (trendlines, rays,
-text annotations, arrows) in edit mode, those drawings should be captured
-and persisted on the question. Loaded back on play / preview / re-edit.
-
-**Why deferred.** SC's drawings-tools layer does not yet expose:
-
-- "list all drawings on the chart" (TV: `chart.getAllShapes()`)
-- "delete a drawing by ID" (TV: `chart.removeEntity(id, {disableUndo:true})`)
-- programmatic creation of typed drawings the user could otherwise create
-  via the toolbar.
-
-See `INTEGRATION.md → Phase 7` for the dependency note and
-`SUPERCHART_BACKLOG.md` row #6 (drawings tools audit).
-
-**Blockers.** SC drawings-tools API + Phase 6 StorageAdapter.
-
-**Placeholder.** `DrawController.getAllDrawings`, `getAllShapes`,
-`deleteShape`, `deleteShapes`, `removeAllDrawings` return empty arrays or
-no-op. `EditQuestionSaveLoadAdapter.saveLineToolsAndGroups` is a no-op.
+> **Status update.** Several items originally listed here as deferred are
+> now **delivered** in the working branch (commit `ff0c14e0` "wire quiz
+> storage, persistence, and gating"). The persistence-side gap that this
+> file was written to track is closed; what remains here are the items
+> still genuinely out of scope. See `design.md §13 (Storage & persistence)`
+> for the as-built design.
 
 ---
 
-## User indicators capture in edit mode
+## ✅ DELIVERED — User drawings capture in edit mode
 
-**What it is.** Same as drawings, but for indicators (RSI, MACD, custom
-studies). Creator adds an indicator, the question records its name + input
-values; replayed on play / preview.
-
-**Why deferred.** klinecharts' indicator API needs an audit for: list
-attached indicators, read input values, attach a typed indicator with custom
-inputs, remove by ID. The 4 custom Altrady indicators (`rsiStoch`,
-`previousCandleOutliers`, `smartMoney`, `Willams21EMA13`) also need to be
-ported to klinecharts (Phase 8).
-
-**Blockers.** SC drawings/indicators API audit + Phase 6 StorageAdapter +
-Phase 8 custom-indicator port (`SUPERCHART_BACKLOG.md` row #8).
-
-**Placeholder.** `DrawController.getAllStudies`, `getStudyInputValues`,
-`createStudy`, `createStudies`, `removeStudies`, `removeAllStudies` return
-empty arrays or no-op. `EditQuestionSaveLoadAdapter.saveChart` is a no-op.
+Captured live via SC's autosave → `QuizStorageAdapter.save` → bucketed into
+`questionDrawings` / `hintDrawings` / `solutionDrawings` per the active
+`drawingMode` (or kept in the existing bucket when mode is unset, matched
+by id). Drawings made in `new` / `edit` mode persist to the question. SC's
+drawing-tools API was sufficient — no `getAllShapes` / `deleteShape`
+equivalents needed because the chart-engine state is the source of truth
+and `adapter.save` is fed the full overlay list on every mutation.
 
 ---
 
-## Auto-load saved drawings / indicators on enter edit / play / preview
+## ✅ DELIVERED — User indicators capture in edit mode
 
-**What it is.** When entering a question, restore the drawings + indicators
-that were saved on it. Currently routed through `QuestionSaveLoadAdapter` /
-`EditQuestionSaveLoadAdapter`.
+Captured via the same `adapter.save` path. Indicators are global to the
+question (not per-bucket) and live on `question.questionStudies`.
+`QuizPersistenceController` does a surgical diff (`removed` / `changed` /
+`added`) on question-id change so kept indicators don't flash. Indicator
+creation goes through SC's indicator-picker modal, which writes through
+`adapter.save`; programmatic restore on question switch goes through
+`sc.loadState()` (the only public path that updates both canvas and modal
+signals).
 
-**Why deferred.** Depends on capture-side being implemented first
-(previous two items) and on the StorageAdapter port (Phase 6).
-
-**Blockers.** Same as the two items above.
-
-**Placeholder.** `Question.refreshStudies()` and `Question.updateDrawingsTrigger()`
-remain no-ops on the SC path.
+> The 4 custom Altrady indicators (`rsiStoch`, `previousCandleOutliers`,
+> `smartMoney`, `Willams21EMA13`) port is still Phase 8 — orthogonal to the
+> capture/restore pipeline.
 
 ---
 
-## `QuestionSaveLoadAdapter` / `EditQuestionSaveLoadAdapter` real implementation
+## ✅ DELIVERED — Auto-load saved drawings / indicators on enter edit / play / preview
 
-**What it is.** The current adapters extend `LocalSaveLoadAdapter` (TV-shaped
-contract). Need rewriting to implement SC's `StorageAdapter` interface so the
-SC instance can save/restore per-question chart state.
+Auto-loaded via `adapter.load` — SC calls it on chart mount and on
+`storageKey` change. `load()` returns the gated overlay set (edit: full
+buckets; preview/play: `questionDrawings + (showHint? hint : []) + (answer
+&& !hideAnswer? solution : [])`) plus indicators. On question-id change the
+`quizPersistence.reload()` controller path drops the chart and re-hydrates
+from the adapter (drawings imperatively, indicators via `sc.loadState`).
 
-**Why deferred.** Phase 6 (Persistence) has not landed yet. The
-`StorageAdapter` shape, the `storageKey` strategy (per question vs. per
-market), and migration of existing TV-format saved data all happen there.
+---
 
-**Blockers.** Phase 6 (`SUPERCHART_BACKLOG.md` row #7).
+## ✅ DELIVERED — Storage adapter
 
-**Placeholder.** Adapter classes exist as no-op shells — no save calls go
-through, load calls return empty state.
+`QuestionSaveLoadAdapter` / `EditQuestionSaveLoadAdapter` are gone (file
+deleted in commit `ba984246`). Replaced by `QuizStorageAdapter` at
+`src/models/quiz/quiz-storage-adapter.js` which implements SC's
+`StorageAdapter` shape (`load` / `save` / `delete`). The `storageKey` is
+unused — the adapter resolves the active question and mode from
+`quizController` at call time, so a single chart instance handles
+edit/preview/play without re-keying.
 
 ---
 

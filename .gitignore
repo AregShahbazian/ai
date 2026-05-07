@@ -7,7 +7,6 @@
 # allow specific top-level paths
 !/.gitignore
 !/CLAUDE.md
-!/.claude.json
 !/ai/
 
 # scratch prompt staging file — not worth versioning

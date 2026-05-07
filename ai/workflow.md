@@ -228,3 +228,7 @@ COINRAYJS_DIR=/path/to/coinrayjs
 ```
 
 Claude reads this file to resolve `$SUPERCHART_DIR` and `$COINRAYJS_DIR` at runtime. All `ai/` docs use these variables — **never hardcode absolute paths in `ai/` docs**.
+
+## Shorthand
+
+When I append `Nw-` to a message (e.g. `100w-`, `50w-`, `200w-`), it means "reply in N words or less." Treat it as a hard cap on the answer body — not on tool calls or code blocks I explicitly asked for.

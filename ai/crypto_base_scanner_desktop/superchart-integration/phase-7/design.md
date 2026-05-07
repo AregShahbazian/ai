@@ -4,6 +4,31 @@ Design choices for `prd.md` (`id: sc-quiz`).
 
 ---
 
+## 0. Status preamble — drift between design and as-built
+
+Most sections below describe the implementation accurately. A few items
+drifted during implementation; this preamble lists the renames and moved
+ownership in one place so the rest of the doc reads correctly:
+
+| Original (in design below) | As-built |
+|---|---|
+| `DrawController` | `AnimationController` (`src/models/quiz/animation-controller.js`). Same shape — replay-engine driver: `drawUntil` / `overrideSpeed` / `stopDrawing` / `reset` / `setVisibleRange`. The drawings/indicators no-op stubs originally listed on `DrawController` are gone — that work moved to the new persistence layer (see §13). |
+| `DrawController.chartController` getter | Moved to `QuizController.chartController` (`src/models/quiz/quiz-controller.js`). Resolves via `ChartRegistry.get("quiz")` (the quiz route mounts a single chart with the fixed id `"quiz"`); falls back to any registered controller. The animation controller and the persistence path both reach the chart through `quizController.chartController`. |
+| `quizController.draw` | `quizController.animation`. Same instance, renamed reference. The reducer / state shape still uses `draw` (`onSaveDrawState`, `QUIZZES_DRAW_STATE_SHAPE`) — only the controller field name changed. |
+| `_withChart` polling fallback | Uses `ChartRegistry.subscribe(tick)` plus `cc.replay.whenReady()`. The `whenReady` step waits for `superchart.onApiReady` → `ReplayController.init()`; without it, `setCurrentTime` calls fired between `ChartRegistry.register` and `onApiReady` were silent no-ops because `_replayEngine` was still null. |
+| `EditController.refreshTv` | `EditController.focusOnQuestion(question, prevQuestion, {noFocus})`. The `noFocus` flag threads through `loadQuestion` so Reset / delete-question paths can avoid retriggering a VR jump on the still-active question. |
+| `QuestionSyncController.focusEditQuestion` | Removed. The `[question?.id]` effect in `quiz-super-chart.js` no longer focuses VR — `quizPersistence.reload()` runs there instead. VR re-focus on identity change is handled by `editFocusRange` via the alt+R hotkey or by `focusOnQuestion`'s symbol/resolution branch. |
+| `QuestionSaveLoadAdapter` / `EditQuestionSaveLoadAdapter` | **Files deleted.** Replaced by `QuizStorageAdapter` — see §13. |
+| Drawings/indicators no-op stubs on `DrawController` | Gone. Capture and restore are real — see §13. |
+| Header CSS hacks for hiding period-bar buttons | Replaced by SC feature flags (`disabledFeatures` constructor option + `setFeatureEnabled` runtime). See §2. |
+| MODE_POLICY in `quiz-super-chart.js` | Per-mode policy expanded to `{periodBarVisible, lockSymbolPeriod, showSettings, showIndicatorPicker, showQuizContextMenu, drawingBarVisible}`. The `lockSymbolPeriod` flag distinguishes `edit` (locked — existing question) from `new` (unlocked — symbol/resolution still editable). |
+
+The rest of this doc reads against the original names where it improves
+historical readability (this is a design record, not a code reference);
+when in doubt, the as-built names in the table above win.
+
+---
+
 ## 1. Architecture overview
 
 ```
@@ -723,34 +748,30 @@ populating it.
   for a market, the question simply fails to render its candles — same
   failure mode as any live chart.
 
-## 11. Open questions (resolve during implementation)
+## 11. Open questions
 
-1. **Where does `QuizSuperChartWidget` actually live?** Under
-   `super-chart/quiz/` next to other SC variants, or under a new
-   `super-chart/variants/` umbrella? Lean toward `super-chart/quiz/` for
-   consistency — `super-chart/charts/`, `super-chart/preview/` already
-   set the precedent.
+All resolved during implementation:
 
-2. **`Question.animationLengthCandles` exposure.** The candle count for
-   `drawUntil` calls is already encoded in `question.questionStartTime`
-   (which is `solutionStart - animationLengthCandles * resolutionMs`). The
-   `drawUntil` helper computes count internally from `(target - now) /
-   resolutionMs`. Confirm during implementation that no quiz UX cares
-   about the exact computed count beyond the speed-ceiling check.
+1. ~~**Where does `QuizSuperChartWidget` actually live?**~~ Resolved — under
+   `super-chart/quiz/` next to other SC variants
+   (`super-chart/quiz/quiz-super-chart.js`).
 
-3. **`isResetting` state.** Old code had `isResetting` in the draw state
-   shape. The new path uses `chartController.replay`'s status. Likely
-   removable — verify no consumer reads it.
+2. ~~**`Question.animationLengthCandles` exposure.**~~ Resolved — the count
+   stays encoded in `question.questionStartTime`. `AnimationController.drawUntil`
+   computes it internally and only uses the count for the speed-ceiling
+   check. No quiz UX reads the exact value.
 
-4. **Mobile-only price-time-select toast.** `useQuizHandlers` shows a
-   "use long press" toast on mobile when starting price-time-select. The
-   new `InteractionController` may need an equivalent hook, or the toast
-   can stay on the quiz handler side. Verify.
+3. ~~**`isResetting` state.**~~ Resolved — removed. Engine status is
+   authoritative.
 
-5. **`refreshStudies` / `updateDrawingsTrigger` callsites in
-   `Question.js`.** They become no-ops; double-check no quiz flow
-   structurally breaks when they resolve immediately. (E.g. ordering
-   between `refreshStudies` and `drawQuestion`.)
+4. ~~**Mobile-only price-time-select toast.**~~ Resolved — kept on the
+   quiz-handler side (`useQuizHandlers`), no `InteractionController` hook
+   needed.
+
+5. ~~**`refreshStudies` / `updateDrawingsTrigger` callsites.**~~ Resolved —
+   `refreshStudies` is gone (the persistence layer handles indicator
+   restore on question switch via `quizPersistence.reload()`).
+   `updateDrawingsTrigger` is gone too.
 
 6. ~~**`QuizContextProvider` location.**~~ **Resolved** — provider moves
    to `containers/quizzes.js`, scoped to the `/quizzes` route only. The
@@ -761,3 +782,261 @@ populating it.
    (`openQuizResult`, answers, timings) — those reload from the backend
    on `/quizzes` re-entry. Ephemeral context state is recreated per
    mount, which is fine.
+
+---
+
+## 12. `QuestionSyncController` — quiz chart symbol/period sync (as-built)
+
+The earlier §4c described a `focusEditQuestion()` method called from the
+`[question?.id]` effect. That method was removed during implementation
+because it caused a spurious VR re-sync when navigating between questions
+on the same symbol/resolution (the chart was already loaded; nothing to
+re-focus). The remaining responsibilities:
+
+1. **State→chart sync** (`syncSymbolToChart`, `syncResolutionToChart`),
+   echo-guarded.
+2. **VR re-focus after load** (`_scheduleEditFocusAfterLoad`) — called
+   from `_onChartSymbolChange` / `_onChartPeriodChange`. Subscribes
+   one-shot to `onVisibleRangeChange`; when SC's own reset fires after
+   the load completes, the callback calls `setVisibleRange` with
+   `editFocusRange`. This handles both user-initiated and state-driven
+   symbol/resolution changes.
+
+Wiring in `QuizChart`:
+- `useEffect([coinraySymbol])` → `syncSymbolToChart`
+- `useEffect([resolution])`    → `syncResolutionToChart`
+- `useEffect([question?.id])`  → `quizPersistence.reload()` (no VR call)
+
+Same-question timestamp edits do not trigger VR jumps — `editFocusRange`
+is only consumed by alt+R and by `_scheduleEditFocusAfterLoad` (which only
+fires on load completion). The `EditController.focusOnQuestion` path
+applies `setVisibleRange` only when symbol/resolution changed or on the
+initial load of a new question identity.
+
+---
+
+## 13. Storage & persistence (added during implementation)
+
+The original PRD scoped storage out (see initial `deferred.md`), then
+folded it back in during implementation. The architecture below is what
+shipped — see commit `ff0c14e0` "wire quiz storage, persistence, and
+gating".
+
+### 13.1 Data model (existing on `Question`, used by adapter)
+
+The `Question` model already held the storage shape — three drawing
+buckets and one global indicator list. The adapter just bridges SC's
+StorageAdapter contract to these:
+
+```
+question.questionDrawings    ← the always-shown drawings
+question.hintDrawings        ← shown when showHint is on
+question.solutionDrawings    ← shown after the user answers
+question.questionStudies     ← indicators (global to the question, not bucketed)
+question.drawingMode         ← edit-mode UI state: which bucket the user
+                               is currently editing ("question" | "hint" |
+                               "solution" | undefined for "show all")
+question.allDrawings         ← computed: concat of the three buckets
+question.getDrawingsForMode  ← computed: bucket lookup by name
+```
+
+The buckets are persisted server-side as part of the question payload.
+Drawings come back from the API with whatever ids they were saved with;
+the chart-side path (§13.3) regenerates fresh UUIDs on every render to
+avoid klinecharts' id-collision tombstone bug.
+
+### 13.2 `QuizStorageAdapter` (model layer)
+
+`src/models/quiz/quiz-storage-adapter.js`. Implements SC's `StorageAdapter`
+shape (`load(key) → {state, revision}`, `save(key, state) → {revision}`,
+`delete(key)`). The `key` argument is unused — the adapter resolves the
+active question and mode from `quizController` at call time, so the same
+chart instance handles edit/preview/play without re-keying.
+
+**Mode resolution.** `isEditMode` is `quizController.questionController ===
+quizController.edit`. Anything else (preview, play) is read-only.
+
+**Load.** Returns:
+```
+{state: {version: 1, indicators, overlays, styles, paneLayout, preferences}, revision}
+```
+
+- `indicators`: `_loadIndicatorsOverride ?? question.questionStudies`.
+- `overlays`: in edit mode, `_editOverlays(question)` →
+  `question.drawingMode ? getDrawingsForMode(mode) : allDrawings`. In
+  preview/play, `_playOverlays(question, qc)` →
+  `questionDrawings + (showHint? hint : []) + (answer && !hideAnswer?
+  solution : [])`. `_loadOverlaysOverride` short-circuits this.
+
+The override hooks (`setLoadIndicatorsOverride`, `setLoadOverlaysOverride`)
+let `quizPersistence.reload` feed `sc.loadState()` only the new/changed
+indicators — kept indicators would otherwise duplicate, since `loadState`
+is additive.
+
+**Save.** SC autosaves on every overlay/indicator mutation. The adapter:
+- No-ops in preview/play (the gated load returns only some buckets — letting
+  save echo those would wipe the omitted ones).
+- No-ops while `_loading` is true (suppress autosave during reload-driven
+  bulk mutations).
+- Drops any overlay with `save: false` (transient prev-question drawings
+  must never enter the buckets).
+- Routes overlays to buckets: if `drawingMode` is set, the whole list goes
+  to that bucket; otherwise each overlay stays in its existing bucket
+  (matched by id), with new overlays defaulting to `"question"`.
+- Compares against `question.questionStudies` via deep equality that
+  ignores `id` (SC reassigns ids on every save) and writes only on real
+  change. `touch()` (dontSave) fires before `setQuestionStudies` so the
+  subsequent respawn captures `touched=true` in the cloned state.
+
+**Delete.** Clears the active bucket if `drawingMode` is set, else all
+buckets, plus indicators.
+
+**Defensive equality helpers.** `sameOverlays` is a JSON deep-equal —
+catches drag/coord changes (ids stable, points differ). `sameIndicators`
+strips `id` because SC issues fresh ids on every load.
+
+### 13.3 `QuizPersistenceController` (chart-side)
+
+`src/containers/trade/trading-terminal/widgets/super-chart/controllers/quiz-persistence-controller.js`.
+Sub-controller on `QuizChartController` (which extends `ChartController`).
+Owns chart-side imperative drawing/indicator application — the things SC's
+`adapter.load` + autosave cannot express on its own.
+
+**`reload()`** — full path used on question-id change and on Reset:
+
+1. Drop chart state imperatively. Walk `adapter.current.overlays` and call
+   `sc.removeOverlay(id)` for each. Then walk `_viewTransientIds` (preview/
+   play UUIDs that weren't in `adapter.current` because they're not in
+   question state).
+2. In **edit mode**: render the full bucket(s) with fresh UUIDs (avoiding
+   the klinecharts tombstone bug — re-creating an overlay with a
+   just-removed id silently fails). Write the fresh ids back via
+   `adapter.setBucketDrawings(bucket, list, {silent: true})` so the form
+   doesn't get touched.
+3. In **preview/play**: render the gated subset (`adapter.viewOverlays()`)
+   with fresh UUIDs into `_viewTransientIds`. No bucket writes.
+4. Diff indicators (`{removed, changed, added}`). Remove the old/changed
+   ones via `sc.removeIndicator(name)`. Set `_loadIndicatorsOverride` to
+   `[...changed, ...added]` and `_loadOverlaysOverride` to `[]`, then call
+   `sc.loadState()` — this restores the new indicators through SC's
+   modal-aware path (the only public API that updates both canvas and
+   `chartStore.mainIndicators`/`subIndicators`). The `[]` overlays
+   override prevents `loadState` from re-creating drawings (we already
+   handled them above; without the override, `loadState`'s additive
+   behaviour would either fight us or duplicate).
+5. Apply prev-question drawings via `_applyPrevDrawings()`.
+
+**`swapDrawings()`** — fires on `question.drawingMode` change. Lighter
+than `reload`: keeps indicators and transient prev overlays in place,
+reads the chart's current overlays via `chart.getOverlays()` (NOT
+`adapter.current` — adapter state lags during rapid mutations), excludes
+prev-transient ids, removes everything else, recreates from the new
+bucket(s) with fresh UUIDs, writes back silently.
+
+**`_applyPrevDrawings()`** — renders the previous question's drawings as
+**transient** overlays (`save: false, lock: true`, fresh UUIDs). Mode
+gating mirrors TV-prod:
+
+| Mode | Predicate | Source |
+|---|---|---|
+| edit    | `question.isSameMarketResolution(prevQuestion)`   | `editController.prevQuestionDrawings` (already gated by sameMarketResolution) |
+| play    | `await questionsCanTransition(prev, current)`     | `prevQuestion.allDrawings` |
+| preview | never                                              | — |
+
+A signature string (`mode|prevId|symbol|resolution|count`) lets repeat
+calls with unchanged input no-op — prevents flash on question switches
+that share the same prev set. Public `applyPrev()` is fired from
+`subscribeBarsLoaded` so prev drawings appear after the first dataset
+lands (initial mount restore doesn't include them).
+
+**`clearBucket(mode)`** — exposed for the form-side X-chip on
+`DrawingModePicker`. Removes the bucket's drawings from chart and writes
+the empty bucket via the adapter. Same call regardless of whether the
+bucket is currently visible.
+
+**`removeIndicator(name)` / `removeOverlay(id)`** — passthroughs for
+form-side actions that need the chart as the single source of truth.
+
+### 13.4 Wiring (`quiz-super-chart.js`)
+
+Mounted once via the chart-lifecycle setup callback:
+
+```js
+const adapter = useMemo(() => new QuizStorageAdapter({quizController}), [...])
+
+useChartLifecycle({
+  superchartOptions: {storageAdapter: adapter, storageKey: "quiz", ...},
+  ControllerClass: QuizChartController,
+  setup: ({superchart, controller}) => {
+    controller.replay        = new ReplayController(controller, {forceDefaultMode: true})
+    controller.questionSync  = new QuestionSyncController(controller, {quizController})
+    controller.quizOverlays  = new QuizOverlaysController(controller, {quizController})
+    controller.quizPersistence = new QuizPersistenceController(controller, {adapter})
+    superchart.onApiReady(() => controller.replay?.init())
+    controller.subscribeBarsLoaded(() => controller.quizPersistence?.applyPrev())
+  },
+})
+```
+
+React effects:
+
+| Dep | Action |
+|---|---|
+| `coinraySymbol`             | `questionSync.syncSymbolToChart(coinraySymbol, resolution)` |
+| `resolution`                | `questionSync.syncResolutionToChart(resolution)` |
+| `question?.drawingMode`     | `quizPersistence.swapDrawings()` |
+| `question?.id`              | `quizPersistence.reload()` |
+| `[showHint, answer, preview.answer, mode]` | `quizPersistence.reload()` (preview/play only) |
+| `keepPrevQuestionDrawings`  | `quizPersistence.applyPrev()` |
+| `mode`                      | `setFeatureEnabled` for period_bar / symbol_search / period_picker / indicator_picker |
+
+The `mountedRef` gate on every effect is critical — SC's own
+`restoreChartState` runs on first mount via the storage adapter, so a
+manually-fired `reload` on first mount would race/duplicate with it.
+
+### 13.5 Touch hygiene
+
+Two paths can mark a question touched:
+
+1. **Adapter writes** — `adapter.save` calls `q.touch()` before
+   `setQuestionStudies` (only when indicators actually changed by deep
+   equality). Drawing setters (`setQuestionDrawings` etc.) handle their
+   own touch internally and accept `{silent: true}` to skip it for
+   adapter-driven bucket rewrites.
+2. **Form actions** — direct user actions that bypass the adapter (e.g.
+   removing a question's option from the form X-chip, the
+   drawing-mode-picker clear button). These call `await question.touch()`
+   before mutating.
+
+The `[currentQuestion.touched]` effect in `edit-question.js` flips the
+edit-mode UI on automatically when the first chart-driven mutation lands
+(takes the user from overview → edit form without an explicit click).
+
+### 13.6 Why imperative drawings (and not just `loadState`)
+
+Three problems force the imperative path on `reload`:
+
+1. **`sc.loadState` is additive** — does not clear existing drawings.
+   Calling it repeatedly on question switch would accumulate.
+2. **klinecharts tombstone bug** — `chart.createOverlay({id: justRemovedId})`
+   silently fails for one tick after the remove. Reusing question-state
+   ids on Reset (which removes-then-restores the same set) would lose
+   half the overlays. Fresh UUIDs sidestep this entirely.
+3. **No public `superchart.createIndicator(name, isStack?, paneOptions?)`**
+   exists (only the modal-driven path). For host-driven indicator restore
+   we still rely on `sc.loadState()` — which is fine because indicators
+   don't suffer the tombstone bug and the load-override mechanism prevents
+   duplication.
+
+### 13.7 Open SC API gaps that influenced this design
+
+Filed under `phase-7/sc/`:
+
+- `bug-removeIndicator-modal-desync.md` — fixed upstream by SC commit
+  `84cac1c` (modal now fires through the adapter natively; no monkey-patch
+  needed in the consumer).
+- `feature-setDrawingBarVisible.md` — runtime drawing-bar toggle (still
+  pending; the consumer uses `drawingBarVisible` constructor option).
+- Implicit: no public `superchart.createIndicator(...)` API. Mentioned
+  above; not yet filed as a feature request because `loadState` covers
+  the host-driven restore use case.

@@ -46,9 +46,12 @@ boundary visually:
 
 #### Edit / New mode
 
-7. **Open `/quizzes/edit/<id>`.** Chart loads, period bar **hidden**
-   (existing question — symbol/resolution locked), no replay controls
-   panel visible.
+7. **Open `/quizzes/edit/<id>`.** Chart loads, period bar **visible** with
+   the symbol-search and period-picker buttons **disabled** (existing
+   question — symbol/resolution locked via `disabledFeatures`); no replay
+   controls panel visible. (Earlier draft had the period bar fully hidden;
+   the implementation kept it visible so other period-bar buttons remain
+   usable.)
 8. **Header in edit mode shows only Settings.** No Alert, no Buy, no
    Sell, no Replay.
 9. **Live ticks update the latest candle.** Wait 1 minute on a 1m
@@ -160,15 +163,14 @@ boundary visually:
 41. **Overlays clear on chart reset.** Trigger a hard transition
     (different symbol) → previous question's overlays gone after reset.
 
-#### Drawings / indicators noop verification
+#### Drawings / indicators (storage now wired — see Round 2)
 
-42. **Edit mode does not crash when drawing.** In edit mode, open the
-    drawing toolbar (if SC exposes one) → draw a trendline. Chart should
-    not throw, drawing renders locally. **Reload** → drawing is gone
-    (this is the deferred behaviour, documented in `deferred.md`).
-43. **No save/restore on question change.** Switch between questions
-    in edit mode — no console errors about `getAllShapes` /
-    `createStudy` / `saveChartToServer` calls failing.
+42. ~~**Edit mode does not crash when drawing.**~~ **Superseded by Round 2.**
+    Drawings are now persisted; the original noop-verification
+    expectations no longer apply.
+43. ~~**No save/restore on question change.**~~ **Superseded by Round 2.**
+    Drawings/indicators DO save and restore on question change; see Round
+    2 §Persistence.
 
 #### TT-decoupling regression
 
@@ -268,3 +270,135 @@ boundary visually:
 69. **Play mode `playUntil` post-answer.** After submitting, candles
     animate to `solutionEnd` and pause. `onReplayStatusChange` fires the
     `paused` status exactly once, resolving `_waitUntilPaused`.
+
+---
+
+## Round 2: Storage / persistence / prev-question drawings
+
+Folded back in after Round 1 (originally deferred — see early
+`deferred.md`). All items below verify behaviour delivered by commit
+`ff0c14e0` and follow-ups.
+
+### Persistence — drawings (edit)
+
+70. **Add a drawing in edit mode** → reload page → drawing reappears.
+71. **Drag an existing drawing** → reload → drawing is at the new
+    coordinates (deep-equality `sameOverlays` catches coord changes even
+    though ids stayed the same).
+72. **Switch `drawingMode` to "hint"** → only hint drawings show; switch
+    to "solution" → only solution drawings; switch to undefined ("show
+    all") → all three buckets render.
+73. **Add a drawing while `drawingMode = "hint"`** → reload → drawing is
+    in `question.hintDrawings`, not `questionDrawings`.
+74. **No-bucket save preserves bucket assignment.** With
+    `drawingMode = undefined` (showing all), drag an existing solution
+    drawing → reload in mode "solution" → drawing is still classified
+    as solution (matched by id, not re-routed to "question").
+
+### Persistence — indicators
+
+75. **Add an indicator via the picker modal** → reload → indicator
+    reappears.
+76. **Modify indicator settings** (e.g. RSI length) → reload → settings
+    persist.
+77. **Hide an indicator via the modal** → reload → indicator stays
+    hidden (settings property captured by `sameIndicators`'s deep
+    equality, ignoring id).
+78. **No flash on question switch.** Two questions sharing the same
+    indicators: switching between them keeps the indicators on screen
+    without a visible flash (surgical diff: removed/changed/added).
+79. **Question-switch with different indicators.** A→B where B has a
+    different RSI length: the old indicator is removed, the new one
+    appears, no duplicate.
+
+### Mode-aware gating (preview / play)
+
+80. **Hint toggle in preview/play.** Toggle hint on → `hintDrawings`
+    appear on the chart. Toggle off → they disappear. `questionDrawings`
+    always shown.
+81. **Solution gating in play.** Before submitting an answer, no
+    `solutionDrawings` on the chart even if the question has them.
+    After submitting, they appear (unless `hideAnswer` is set).
+82. **Solution gating in preview.** Same as play: solutionDrawings
+    only appear after the user picks an answer (`preview.answer`).
+83. **`hideAnswer` suppresses solution drawings** in play mode even
+    after the user has answered.
+84. **Adapter.save is no-op in preview/play.** Try interacting with a
+    drawing in play mode (if SC's input layer allows it) — no save
+    fires; reload preserves question state untouched.
+85. **Indicators always returned regardless of bucket gating.** Open a
+    play-mode question whose `questionStudies` contain RSI → RSI
+    appears on the chart (indicators are global to the question, not
+    bucketed).
+
+### Prev-question drawings (transient overlays)
+
+86. **Edit mode, same-symbol/resolution prev question** with drawings →
+    open the next question → prev-question drawings appear faded /
+    locked. Try to drag → can't (lock: true).
+87. **Edit mode, different-symbol prev question** → prev drawings do
+    NOT render.
+88. **Play mode, transitionable** (passes `questionsCanTransition`) →
+    prev drawings render.
+89. **Play mode, non-transitionable** → prev drawings do NOT render.
+90. **Preview mode** → never renders prev drawings.
+91. **No flash on question switch with same prev set** — sig check on
+    `_resolvePrev` short-circuits when `mode|prevId|symbol|resolution|count`
+    is unchanged.
+92. **Toggle "Keep drawings of previous question"** in play settings
+    while a question is active → prev drawings appear/disappear
+    immediately (no need to navigate).
+93. **Prev-question drawings do not save back.** Drag-of-transient is
+    blocked by `lock: true`; even if a transient overlay appears in
+    `state.overlays`, `adapter.save` filters `o.save !== false` before
+    bucket routing.
+
+### Decision-point arrow (delivered as part of overlay design)
+
+94. **Arrow anchors at the candle's high.** Open an answered play
+    question → arrow points down at the high of the
+    `solutionStart`-aligned bar (FA `` glyph), with "Decision
+    point" label above.
+95. **Initial-load arrow visibility.** Cold-load directly into
+    `/quizzes/play/<id>` for an answered question — arrow appears on
+    first paint (subscribe-bars-loaded triggers the redraw once the
+    candles arrive; previously it was invisible because `getDataList()`
+    was empty at first mount).
+
+### Reset path
+
+96. **Reset in edit mode** → drawings rehydrate without disappearing
+    (no klinecharts tombstone). Form is NOT marked touched (silent
+    bucket writeback). Chart VR doesn't jump (reload is called with
+    `noFocus`).
+97. **Delete-question Reset** — when a question is deleted via the
+    confirm modal, the surviving currentQuestion's drawings re-render
+    correctly.
+
+### Auto edit-mode switch
+
+98. **Drawing in overview** auto-switches to edit form. Open a question
+    in overview, draw a trendline → form transitions to edit mode (the
+    `[currentQuestion.touched]` effect fires when the chart-driven
+    autosave path calls `q.touch()`).
+99. **Form X-chip touches first.** Removing a question option via the
+    form X chip → form marks touched immediately (no race where the
+    next input change overwrites it).
+
+### Answered-question animation (commit `7cfd01da`)
+
+100. **Cold-load an answered question with animation ON.** Candles
+     animate up to `solutionEnd` (not `solutionStart`). Verifies the
+     `animEnd = (!hideAnswer && answer) ? solutionEnd : solutionStart`
+     branch in `play.drawQuestion`.
+
+### MODE_POLICY runtime sync
+
+101. **Switch from new-question form to edit of an existing one.** Period
+     bar stays visible but symbol-search and period-picker buttons
+     become disabled (mode-change effect calls
+     `setFeatureEnabled("symbol_search", false)` etc.). No need to
+     re-mount the chart.
+102. **Drawing bar visibility.** Drawing bar shows in new/edit, hides in
+     play/preview (`drawingBarVisible` constructor option + per-mode
+     policy).

@@ -6,6 +6,12 @@ Order matters: each task assumes the previous ones have landed.
 
 ✅ = done and merged into the working branch.
 
+> **Status note.** Tasks 1–17 below are the original port. The persistence
+> work (originally deferred — see initial `deferred.md`) was folded back in
+> during implementation; tasks 18–22 below cover what was actually built
+> for storage/persistence/prev-question drawings. See `design.md §13` for
+> the full architecture.
+
 ---
 
 ## 1. TT decoupling — remove TT-side quiz remnants ✅
@@ -220,7 +226,16 @@ bottom nav reappears. Same for `/quizzes/preview/<id>`. On `/trade`,
 
 ---
 
-## 3. `DrawController` refactor ✅
+## 3. `DrawController` → `AnimationController` refactor ✅
+
+> **As-built rename.** `DrawController` was renamed to `AnimationController`
+> (`src/models/quiz/animation-controller.js`) and the `chartController`
+> getter moved to `QuizController`. Reference field renamed from
+> `quizController.draw` → `quizController.animation`. State shape and
+> reducer keys (`draw`, `QUIZZES_DRAW_STATE_SHAPE`, `onSaveDrawState`)
+> kept their names. The drawings/indicators no-op stubs originally listed
+> in 3.3 below are gone — that work moved to the new persistence layer
+> (tasks 18–22).
 
 ### 3.1 Strip TV-coupled surface ✅
 
@@ -251,12 +266,15 @@ Per `design.md` section 3:
 - Refactor `setVisibleRange` to delegate to `chartController.setVisibleRange`
   (unix seconds).
 
-### 3.3 Stub drawings/indicators methods as noops ✅
+### 3.3 Stub drawings/indicators methods as noops ✅ (later removed entirely)
 
-Per `design.md` section 3 + 7. Add `// deferred (sc-quiz):` comment to each.
+Originally per `design.md` section 3 + 7 — added `// deferred (sc-quiz):`
+no-op stubs to `DrawController`. **Later removed** during the persistence
+work (tasks 18–22) since the real storage path replaced them. Cleaned up
+in commit `ba984246` ("Quiz-TV code cleanup").
 
-**Verify:** unit-grep that `draw-controller.js` has no `tv.` accesses, no
-`onRealtimeCallback`, no `chart.createShape`, no `chart.removeEntity`.
+**Verify:** unit-grep that `animation-controller.js` has no `tv.` accesses,
+no `onRealtimeCallback`, no `chart.createShape`, no `chart.removeEntity`.
 Open `/quizzes/play/<some-quiz>`, animation triggers progressive reveal.
 
 ---
@@ -328,16 +346,11 @@ animate to `questionStartTime`, no answer recorded.
 
 ---
 
-## 8. Storage adapter no-ops ✅
+## 8. Storage adapter no-ops ✅ (later replaced by real implementation)
 
-**File:** `src/models/quiz/question-save-load-adapters.js`
-
-Replace both classes with the no-op shells from `design.md` section 7.
-Drop the `LocalSaveLoadAdapter` import. Keep the same export names so
-nothing else has to change.
-
-**Verify:** open edit mode, attempt to save a layout → no error, no save
-happens silently. Documented in `deferred.md`.
+Originally per `design.md` section 7 — replaced both classes with no-op
+shells. **Superseded** by tasks 18–22 (real `QuizStorageAdapter`). The
+`question-save-load-adapters.js` file was deleted in commit `ba984246`.
 
 ---
 
@@ -604,3 +617,154 @@ target. Everywhere else delegates to `c._superchart.resetView()`.
 the solution window. alt+R with only one timestamp set → 50-candle window
 around it. alt+R with no timestamps → `resetView()` (latest candle). alt+R
 in TT/CS/GridBot/charts → `resetView()` unaffected.
+
+---
+
+## 18. `QuizStorageAdapter` ✅
+
+**File (new):** `src/models/quiz/quiz-storage-adapter.js`
+
+See `design.md §13.2` for the full spec. Implements SC's `StorageAdapter`
+shape (`load(key)` / `save(key, state)` / `delete(key)`); the `key`
+argument is ignored — active question and mode are read from
+`quizController` at call time.
+
+Highlights:
+- Mode-aware `load`: edit returns full bucket(s) by `drawingMode`;
+  preview/play returns the gated subset (`questionDrawings + (showHint?
+  hint : []) + (answer && !hideAnswer? solution : [])`).
+- `save` is a no-op outside edit mode and during `_loading`. Drops
+  `save: false` overlays defensively. Routes overlays to buckets matched
+  by id; new ones default to `"question"`.
+- Deep equality via `sameOverlays` (catches drag) and `sameIndicators`
+  (ignores id, since SC reissues ids on every load).
+- `setLoadIndicatorsOverride` / `setLoadOverlaysOverride` hooks let
+  `quizPersistence.reload` feed `sc.loadState()` with only the new/
+  changed indicators.
+- Touches the question via `q.touch()` (dontSave) before `setQuestionStudies`
+  so the form auto-switches to edit mode.
+
+**Verify:** in edit mode, draw a trendline → stays after reload. Add an
+indicator via the picker modal → `questionStudies` is set on the question
+state. Switch question via the question switcher → previous question's
+drawings/indicators replaced. Form auto-switches to edit mode after the
+first chart-driven mutation.
+
+---
+
+## 19. `QuizPersistenceController` ✅
+
+**File (new):** `src/containers/trade/trading-terminal/widgets/super-chart/controllers/quiz-persistence-controller.js`
+
+See `design.md §13.3` for the full spec. Owns chart-side imperative
+drawing/indicator application — the things `adapter.load` + autosave
+cannot express on their own.
+
+Methods:
+- `swapDrawings()` — fires on `question.drawingMode` change. Reads chart's
+  current overlays via `chart.getOverlays()` (NOT `adapter.current`),
+  excludes prev-transient ids, removes everything else, recreates from the
+  new bucket(s) with fresh UUIDs. Silent bucket writeback.
+- `reload()` — full path used on question-id change and on Reset.
+  Imperative drawing recreate (with fresh UUIDs to dodge the klinecharts
+  tombstone bug) + surgical indicator diff via `sc.removeIndicator(name)`
+  for removed/changed ones, plus `sc.loadState()` with override hooks
+  feeding only `[...changed, ...added]`. Calls `_applyPrevDrawings()` at
+  the end.
+- `applyPrev()` / `_applyPrevDrawings()` — renders the previous question's
+  drawings as transient overlays (`save: false, lock: true`). Mode gating:
+  edit (sameMarketResolution), play (questionsCanTransition), preview
+  (never). Skips work when sig unchanged → no flash on revisits.
+- `clearBucket(mode)` — exposed for the form X-chip on
+  `DrawingModePicker`.
+- `removeIndicator(name)` / `removeOverlay(id)` — passthroughs for
+  form-side actions.
+
+**Verify:** switch buckets via picker → only drawings change, indicators
+and prev overlays untouched. Reset → chart drawings rehydrate without
+tombstoned ids; form NOT marked touched. Toggle "Keep prev question
+drawings" → prev set appears/disappears live. Question switch in play
+mode where transition rules pass → prev overlays linger; non-transitionable
+switch → they don't.
+
+---
+
+## 20. `QuizChartController` ✅
+
+**File (new):** `src/containers/trade/trading-terminal/widgets/super-chart/quiz-chart-controller.js`
+
+`ChartController` subclass that holds `questionSync`, `quizOverlays`, and
+`quizPersistence` references and disposes them in `dispose()`. The setup
+callback in `quiz-super-chart.js` constructs each sub-controller (they
+need `quizController`, which only the consumer has).
+
+**Verify:** open `/quizzes`, `controllerRef.current.quizPersistence` is
+defined; navigate away, no leaked subscriptions in dev tools.
+
+---
+
+## 21. Wire adapter + persistence in `QuizSuperChartWidget` ✅
+
+**File:** `src/containers/trade/trading-terminal/widgets/super-chart/quiz/quiz-super-chart.js`
+
+Per `design.md §13.4`:
+
+- `useMemo` the `QuizStorageAdapter` (one per mount).
+- Pass it via `useChartLifecycle({superchartOptions: {storageAdapter,
+  storageKey: "quiz", ...}})`.
+- In `setup`, instantiate `QuestionSyncController`, `QuizOverlaysController`,
+  `QuizPersistenceController`. Wire `superchart.onApiReady` →
+  `replay.init()` and `subscribeBarsLoaded` → `quizPersistence.applyPrev()`.
+- Effects (with `mountedRef` gate):
+  - `[question?.drawingMode]` → `swapDrawings()`
+  - `[question?.id]` → `reload()`
+  - `[question?.showHint, question?.answer, preview?.answer, mode]` →
+    `reload()` (preview/play only)
+  - `[keepPrevQuestionDrawings]` → `applyPrev()`
+  - `[mode]` → `setFeatureEnabled` for period_bar / symbol_search /
+    period_picker / indicator_picker
+- Replace CSS-based button hiding with SC `disabledFeatures` constructor
+  option + `setFeatureEnabled` runtime calls. Period bar visibility,
+  symbol/period lock, indicator-picker visibility, drawing-bar
+  visibility all flow from `MODE_POLICY[mode]`.
+
+**Verify:** edit existing question — period bar visible but symbol/period
+disabled. New question — symbol/period editable. Play/preview — no header
+or period bar. Drawing bar visible only in new/edit. Indicator picker
+visible only in new/edit.
+
+---
+
+## 22. Form-side touch hygiene & UX polish ✅
+
+Folded in alongside the storage work. Each item independently completes a
+piece that storage relied on or surfaced.
+
+- **`edit-question.js`** — `useEffect([currentQuestion.touched])` flips
+  the edit-mode UI on automatically when the chart mutates the question
+  (overview → edit form without an explicit click).
+- **`question-fields.js`** — `await question.touch()` before form-X
+  removal so the form marks touched.
+- **`drawing-mode-picker.js`** — `onClear={!drawings.length ? undefined :
+  ...}` to disable the X chip when the bucket is empty. Routes through
+  `question.quizController.chartController?.quizPersistence.clearBucket`.
+- **`multi-select.js`** — `disabled` derived as `disabled || !hasOptions`
+  so an empty MultiSelect doesn't spawn an empty popup on click.
+- **`edit-quiz-modal.js`** — `QuizPublished` takes `quizController` as a
+  prop (modal renders outside `QuizContextProvider`); add `onToggle` to
+  the publish-success modal.
+- **`fa-marker-overlay.js`** — extended `createPointFigures` to render a
+  second text figure when `extendData.label` is provided, positioned
+  above the glyph. `decision-point-arrow.js` uses this to show "Decision
+  point" above the FA arrow-down glyph anchored at `bar.high`.
+- **`decision-point-arrow.js`** — subscribes to `subscribeBarsLoaded` and
+  bumps a `barsTick` state in the `useDrawOverlayEffect` deps so the
+  arrow re-fires after data lands (fixes initial-mount race where
+  `getDataList()` was empty).
+- **`play-controller.drawQuestion`** — both `drawUntil` calls now target
+  `animEnd = (!hideAnswer && answer) ? solutionEnd : solutionStart`, so
+  loading an already-answered question animates to `solutionEnd` instead
+  of stopping at `solutionStart`. (Fixed in commit `7cfd01da`.)
+- **`edit-controller.reload({noFocus})`** — threads through `loadQuestion`
+  → `focusOnQuestion` so the Reset path doesn't retrigger a VR jump on
+  the still-active question.

@@ -7,8 +7,16 @@ id: sc-quiz
 Port the quiz/training system from TradingView to SuperChart, replacing the
 TV-specific candle-gating + drawing-loop hacks with a thin layer on top of the
 already-shipped Phase 5 replay engine. All current functionality is preserved.
-Persistence-side hacks (drawings/indicators capture/restore, per-question chart
-layouts) are out of scope for this PRD — see `deferred.md`.
+
+> **Persistence update.** The original PRD scoped persistence (drawings/
+> indicators capture & restore, prev-question drawings, mode-aware gating)
+> out of Phase 7 — see early `deferred.md`. That work was folded back in
+> during implementation: storage is now wired (`QuizStorageAdapter` →
+> `QuizPersistenceController`), prev-question drawings render as transient
+> overlays, and edit/preview/play render the correct gated overlay set.
+> See `design.md §13 (Storage & persistence)` for the as-built design.
+> Per-question chart layout naming is the only persistence item still
+> deferred.
 
 ## Quiz lives only at `/quizzes`
 
@@ -80,13 +88,22 @@ stay identical to prod.
 
 - Default replay session enabled in quiz edit mode (live chart without
   latest-candle live-tick subscription).
-- Capturing user drawings / indicators in edit mode.
-- Auto-loading saved drawings / indicators on enter edit / play / preview.
-- `QuestionSaveLoadAdapter` / `EditQuestionSaveLoadAdapter` real
-  implementation (StorageAdapter port — Phase 6).
 - Per-question chart layout naming (`saveChartToServer` / `currentLayoutName`).
 - `tradingview-enhancements.js` floating-toolbar drawing buttons (already on
   `SUPERCHART_BACKLOG.md`).
+
+### Originally deferred — now in scope (delivered)
+
+- Capturing user drawings / indicators in edit mode (delivered via
+  `QuizStorageAdapter` autosave path).
+- Auto-loading saved drawings / indicators on enter edit / play / preview
+  (delivered via `adapter.load` + `quizPersistence.reload`).
+- `StorageAdapter` integration (delivered via `QuizStorageAdapter` —
+  `QuestionSaveLoadAdapter` / `EditQuestionSaveLoadAdapter` files deleted).
+- Prev-question drawings as transient overlays (delivered — edit:
+  same-symbol/resolution; play: questionsCanTransition; preview: never).
+- Mode-aware overlay gating (delivered — edit: full buckets; preview/play:
+  questionDrawings + (showHint? hint : []) + (answer? solution : [])).
 
 ### Non-requirements
 
