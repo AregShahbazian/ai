@@ -182,7 +182,7 @@ Requires `VITE_COINRAY_TOKEN` in `$SUPERCHART_DIR/.storybook/.env`.
 
 ## Phases
 
-### Phase 1: Core Chart in Trading Terminal ✅ Done
+### Phase 1: Core Chart in Trading Terminal ✅ Done (incl. onReady migration)
 
 Live SuperChart rendering in the widget slot — same market as the TT, live candles, theme support, bidirectional sync with Market Tab.
 
@@ -196,12 +196,19 @@ Live SuperChart rendering in the widget slot — same market as the TT, live can
 - `onVisibleRangeChange(callback)` — wired in `ChartController` to persist viewport to MarketTab when `miscRememberVisibleRange` enabled
 
 **Remaining:**
-- **`onReady` migration** — Replace `requestAnimationFrame` polling in `super-chart.js` and `setInterval` polling in `replay-controller.js` with `superchart.onReady(callback)`. The SC library now provides `onReady` (constructor option and instance method) that fires when `getChart()` is guaranteed non-null. If already ready, fires immediately. Returns unsubscribe function. See `$SUPERCHART_DIR/.storybook/api-stories/OnReady.stories.tsx` and `$SUPERCHART_DIR/.storybook/overlay-stories/overlays/on-ready.ts` for the pattern.
-- **Search symbol in SC** — SC's symbol search bar needs a search implementation. Currently no symbol search/resolution is wired — the search input exists in the SC UI but doesn't query Coinray markets. Needs a search adapter that queries the app's market data.
+- ~~**`onReady` migration**~~ ✅ Shipped — `superchart.onApiReady` (post-rename) used in `super-chart.js`, `replay-controller.js`, `quiz-super-chart.js`, `market-tab-chart.js`. All polling hacks removed (commit `a413557c7a`).
+- ~~**Search symbol in SC**~~ ✅ Shipped — `[sc-symbol-search]` (commit `f2edcb302a`) wired SC's symbol-search bar to Coinray markets via a search adapter.
 
 ---
 
-### Phase 2: ChartController + SuperChartContext Foundation
+### Phase 2: ChartController + SuperChartContext Foundation ✅ Done
+
+> Shipped. `ChartController` lives at `super-chart/chart-controller.js`,
+> with per-page subclasses (`tt-chart-controller.js`,
+> `quiz-chart-controller.js`, etc.). `SuperChartContext` at
+> `super-chart/context.js`. `ChartRegistry` at `models/chart-registry.js`
+> (`getActive` / `setActive` / `activeId` removed; explicit-id lookups via
+> `[sc-multi-chart]`). `readyToDraw` gated by `superchart.onApiReady`.
 
 Before overlays can be built, we need the foundation they all depend on.
 
@@ -319,7 +326,14 @@ Migrate ALL chart overlay components from TV APIs to SuperChart. Each overlay co
 
 ---
 
-### Phase 4: Chart Interaction (Context Menu, Hotkeys, Screenshot, Header Buttons)
+### Phase 4: Chart Interaction (Context Menu, Hotkeys, Screenshot, Header Buttons) ✅ Done
+
+> Shipped via `[sc-chart-ctx-menu]` + `[sc-chart-ctx-menu-options]`
+> (chart bg menu, including grid-bot backtest entries), and the per-page
+> hotkeys / screenshot / header-button work folded into Phases 5, 7, 9.
+> Per-overlay context menus shipped via `OverlayContextMenu` consuming
+> `onRightClick`. `onTimezoneChange` (Phase 4-blocked) is still pending in
+> SC — see backlog.
 
 Features that let users interact with the chart beyond just viewing candles.
 
@@ -373,7 +387,21 @@ SuperChart has `superchart.createButton()` — wire the same button set through 
 
 ---
 
-### Phase 5: Replay System
+### Phase 5: Replay System ✅ Done
+
+> Shipped. SC delivered a built-in replay engine (`sc.replay`) — Altrady
+> wraps it in `super-chart/controllers/replay-controller.js` (status
+> `setCurrentTime` / `playUntil` / `getReplayCurrentTime` /
+> `onReplayStatusChange` / etc.). `SmartReplayController`,
+> `ReplayTradingController`, `BaseReplayController`, `EchoGuard`, and
+> `HeldKeyTracker` ship in `super-chart/controllers/`. Replay UI
+> (controls / timelines / mode-dialog / hotkeys) and `[sc-multi-chart]`
+> made replay state keying page-agnostic via `controller.id`.
+>
+> SC backlog items #2 (replay candle-push) and #3 (data reset) are
+> obsolete — SC delivered a different shape (engine owns the buffer +
+> `setCurrentTime(null)` resets) and Phase 5 builds against that, not
+> against the originally-imagined `pushCandle` API.
 
 The app has a sophisticated replay/backtest system. SuperChart has no built-in replay — it must be built on top via DataLoader control.
 
@@ -411,9 +439,24 @@ Current: `controllers/replay/replay-controller.js`
 
 ---
 
-### Phase 6: Persistence (StorageAdapter)
+### Phase 6: Persistence (StorageAdapter) — partially done
 
-Save and restore chart state (indicators, drawings, user preferences). **Must come before Quiz (Phase 7)** — the quiz system depends on `SaveLoadAdapter` to persist drawings on quiz questions (`QuestionSaveLoadAdapter`, `EditQuestionSaveLoadAdapter` both extend `LocalSaveLoadAdapter`).
+> **Quiz-side delivered** as part of Phase 7 (originally deferred —
+> folded back in mid-implementation): `QuizStorageAdapter` at
+> `src/models/quiz/quiz-storage-adapter.js` implements SC's
+> `StorageAdapter` shape and bridges to `Question` buckets
+> (`questionDrawings` / `hintDrawings` / `solutionDrawings` +
+> `questionStudies`). The "Phase 6 must precede Phase 7" ordering was
+> dropped — quiz now owns its persistence end-to-end.
+>
+> **General chart-layout persistence still TODO.** No app-wide
+> StorageAdapter is wired for TT / `/charts` / grid-bot / preview yet.
+> Each instance saves nothing across reloads (or relies on Redux for
+> per-tab settings). Decisions to take when this lands: per-market vs.
+> per-tab key strategy, migration of existing TV-format saved data
+> (`/api/v2/tradingview_charts`), and which surfaces opt in.
+
+Save and restore chart state (indicators, drawings, user preferences). ~~**Must come before Quiz (Phase 7)**~~ — that ordering is moot now (quiz shipped its own adapter).
 
 **Current system:**
 - `SaveLoadAdapter` (`controllers/save-load-adapter.js`) — server-side via `/api/v2/tradingview_charts`
@@ -436,9 +479,19 @@ Save and restore chart state (indicators, drawings, user preferences). **Must co
 
 ---
 
-### Phase 7: Quiz System
+### Phase 7: Quiz System ✅ Done
 
-The quiz/training system uses the chart for interactive questions. Separate from replay because it has its own controllers, drawing modes, and UI. **Depends on Phase 6 (Persistence)** — quiz controllers create `QuestionSaveLoadAdapter` / `EditQuestionSaveLoadAdapter` instances for drawing persistence.
+> Shipped (`[sc-quiz]`, commits `78fd334d`, `7b379eea`, `ff0c14e0`,
+> `ba984246`, `85d5743d`, `7cfd01da`). Quiz lives only at `/quizzes` —
+> all TT-side remnants removed. `AnimationController` (renamed from
+> `DrawController`) drives candle-reveal via `sc.replay`.
+> `QuizStorageAdapter` + `QuizPersistenceController` own
+> drawings/indicators capture/restore, mode-aware overlay gating,
+> prev-question transient drawings, and the imperative reload path
+> (fresh UUIDs to dodge klinecharts' tombstone bug). See `phase-7/`
+> for full design + as-built notes.
+
+The quiz/training system uses the chart for interactive questions. Separate from replay because it has its own controllers, drawing modes, and UI. ~~Depends on Phase 6 (Persistence)~~ — Phase 7 ships its own adapter.
 
 **Key components to port:**
 - **DrawController** (`models/quiz/draw-controller.js`) — candle-by-candle animation via `datafeed.getDrawCandleCallback()`
@@ -528,14 +581,22 @@ The app uses TradingView charts in multiple places beyond the main Trading Termi
   is up. `tradingpreview.js` / `DummyDataProvider` untouched (kept until Phase 9c
   cleanup; safe since no consumer imports them anymore).
 
-**9d. Quiz question chart** — chart in quiz editor
-- `containers/quizzes/edit/quiz-question-chart.js`
-- Uses `DefaultTradingWidget` with quiz-specific overlays
+**9d. Quiz question chart** ✅ done (`[sc-quiz]`)
+- `quiz-question-chart.js` mounts `QuizSuperChartWidget`
+  (`super-chart/quiz/quiz-super-chart.js`) with `QuizChartController`.
+- Per-mode policy (new / edit / play / preview) drives header bar,
+  period bar, symbol/period lock, drawing bar, indicator picker, and
+  bg context-menu entries via SC feature flags.
 
 **9e. Other chart consumers**
-- `containers/training/chart.js` — training module (read-only)
-- `containers/customer-service/account/position.js` — CS position analysis
-- `containers/market-explorer/currency/currency-overview/currency-overview-chart.js` — market overview
+- ~~`containers/training/chart.js`~~ — `/training` route removed entirely
+  (commit `a3eb05ece5`). No port needed.
+- `containers/customer-service/account/...` ✅ done
+  (`[sc-customer-service-charts]`) — `account/market.js` and
+  `account/position.js` migrated to SC; trading and replay disabled,
+  read-only display only.
+- `containers/market-explorer/currency/currency-overview/currency-overview-chart.js`
+  — uses HighCharts (not TV/SC), out of scope for this epic.
 
 **Files:**
 - Modify: each consumer to use SuperChart widget variant instead of TV widget
@@ -618,16 +679,23 @@ customer service, training, market explorer). Full removal before release:
 2. ✅ `DevWidgetGuard` and standalone `SuperChart` dev widget removed
 3. ✅ Migrate Charts page (`[sc-charts-page]`): `CandleChart` is now TT-only
    (always SC), and /charts mounts `ChartsPageChartWidget` directly
-4. Migrate remaining TV consumers (quiz, CS, training, market explorer)
-5. Delete `vendor/tradingview/` (6 vendored builds)
-6. Remove CopyWebpackPlugin entry for tradingview
-7. Delete `center-view/tradingview/` widget directory and all sub-files
-8. Delete `DataProvider`, `SymbolsStorage`, `SaveLoadAdapter`, `ChartFunctions`
-9. Clean up `ChartContext`, `VisibleRangeContext` if no longer needed
-10. Remove TV chart version management from `actions/chart-settings.js`
-11. Remove old `visibleRange` (duration-in-seconds) from market tab state and rename
-    `visibleRangeFromTo` to `visibleRange` — SC stores `{from, to}` which replaces TV's
-    duration format
+4. ✅ Migrate remaining TV consumers — quiz (`[sc-quiz]`), CS
+   (`[sc-customer-service-charts]`), training (route removed). Market
+   explorer is HighCharts, not TV.
+5. ✅ Delete `vendor/tradingview/` (folder gone)
+6. ✅ Remove CopyWebpackPlugin entry for tradingview
+7. **Pending** — `center-view/tradingview/` directory still has
+   `controllers/data-provider.js` plus a few leaf files. Sweep before
+   release.
+8. **Pending** — `DataProvider` (still in `tradingview/controllers/`),
+   `SymbolsStorage`, `SaveLoadAdapter`, `ChartFunctions` cleanup. Some
+   may already be unused — grep + delete.
+9. **Pending** — `ChartContext` / `VisibleRangeContext` audit; remove if
+   no live consumers remain.
+10. **Pending** — TV chart-version management in `actions/chart-settings.js`.
+11. **Pending** — `visibleRange` (duration-in-seconds) → rename
+    `visibleRangeFromTo` → `visibleRange` (`{from, to}`) on the market-tab
+    state.
 
 ---
 
@@ -721,16 +789,13 @@ For reference, here is every file in the codebase that touches TradingView APIs:
 
 Callback methods needed on `SuperchartApi`. Each should return an unsubscribe function.
 
-| Method | Needed by | Description |
+| Method | Needed by | Status |
 |---|---|---|
-| `onSymbolChange(callback)` | Phase 1 | Fires when user picks a symbol from the chart UI. Callback receives `SymbolInfo`. |
-| `onPeriodChange(callback)` | Phase 1 | Fires when user picks a period from the chart UI. Callback receives `Period`. |
-| `onVisibleRangeChange(callback)` | Phase 1 | Fires on scroll/zoom. Callback receives `{from, to}` timestamps. |
-| `onTimezoneChange(callback)` | Phase 4 | Fires when user changes timezone from the chart UI. Callback receives timezone string. |
-
-The internal store already has `subscribeSymbol`, `subscribePeriod`, etc. — these callbacks would be thin wrappers exposing them via the public `SuperchartApi` interface.
-
-Note: `onReady` is now available — constructor option and instance method. The instance method returns an unsubscribe function and fires immediately if the chart is already ready. Used to gate operations that need `getChart()` (overlay init, replay engine access). Replaces the polling hacks in `super-chart.js` and `replay-controller.js`.
+| `onSymbolChange(callback)` | Phase 1 | ✅ Shipped |
+| `onPeriodChange(callback)` | Phase 1 | ✅ Shipped |
+| `onVisibleRangeChange(callback)` | Phase 1 | ✅ Shipped (uses `getVisibleRangeTimestamps`) |
+| `onApiReady(callback)` (was `onReady`) | Phase 1 | ✅ Shipped — replaces old polling. Split into `onApiReady` (API mounted) + `onDataLoaded` (first dataset). |
+| `onTimezoneChange(callback)` | Phase 4 | **Pending in SC** — needed to sync chart-UI timezone changes to Redux. Tracked in `SUPERCHART_BACKLOG.md` #5. |
 
 ---
 
@@ -782,7 +847,24 @@ The app has a mobile layout (`screen === SCREENS.MOBILE`) with chart-specific be
 
 Items that were attempted or considered but need more work. Check back on these periodically.
 
-- **Timezone init** — Attempted reading from Redux `chartSettings.timezone` (never actually set — TV's `editChartSettings(timezone)` call passes a string instead of an object) and from TV's `localStorage["tradingview.chartproperties"]` (didn't work). SuperChart's `timezone` constructor option needs investigation — may need SuperChart dev input on how timezone is applied internally, or the value format may differ from what TV stores. Revisit when `onTimezoneChange` callback ships (Phase 4).
-- **Timezone sync between TV and SuperChart** — blocked on `onTimezoneChange` callback + fixing the TV Redux bug (`editChartSettings` should be called with `{timezone}` object, not bare string).
-- ~~**Locale**~~ — RESOLVED: no longer crashes. SC labels stay in English for non-en locales, which is acceptable — Altrady's own overlays/buttons/modals are translated via i18n yaml files.
-- **Replay session persistence across remount** — when SC chart remounts (mobile↔desktop toggle, page navigation), the replay session is lost. Redux state (startTime, time, trades) survives, and the SC engine has `restoreSession(startTime, currentTime, endTime)` to re-enter at the exact position. Implementation needs: `destroy()` stops clearing Redux, `init()` detects existing session and restores, symbol mismatch check on restore. See `ai/superchart-integration/phase-5/deferred.md` and `Superchart/ai/features/replay-restore-session.md`.
+- **Timezone init / sync** — TT-side bug (`editChartSettings(timezone)`
+  passes a bare string) is unfixed; SC-side `onTimezoneChange` is
+  pending. Both needed for Redux ↔ SC timezone sync.
+- ~~**Locale**~~ — RESOLVED.
+- **Replay session persistence across remount** — Redux state
+  (startTime, time, trades) survives but the SC engine doesn't
+  re-enter the session on remount. SC has `restoreSession(startTime,
+  currentTime, endTime)`; needs: `destroy()` stops clearing Redux,
+  `init()` detects existing session and restores, symbol-mismatch
+  guard. See `phase-5/deferred.md` and
+  `Superchart/ai/features/replay-restore-session.md`.
+- **Custom indicators** (Phase 8) — 4 PineJS studies still on TV side
+  (`rsiStoch`, `previousCandleOutliers`, `smartMoney`,
+  `Willams21EMA13`). Need rewriting via klinecharts'
+  `registerIndicator()`. Tracked in `SUPERCHART_BACKLOG.md` #8.
+- **General chart-layout persistence** (Phase 6, non-quiz) — no
+  app-wide StorageAdapter wired yet; only `QuizStorageAdapter` exists.
+- **TV cleanup sweep** (Phase 10f items 7–11) — `tradingview/`
+  directory leftovers (`controllers/data-provider.js` etc.),
+  `ChartContext` / `VisibleRangeContext` audit, market-tab
+  `visibleRange` rename. Pre-release task list.
