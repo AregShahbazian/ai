@@ -1,8 +1,8 @@
 # Superchart Usage Patterns
 
 > Source: `$SUPERCHART_DIR` (example app + source, branch: main)
-> Superchart git hash: `12e80deeeaf17476029f20be35137849ef8a43bc`
-> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `a502c7c910534d8375112f51a656a427bf09c09d`
+> Superchart git hash: `69a41cfaddf9e3dcb0a68d0d12ef29791b913374`
+> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `a9a761a37adada42a9c745e780b42b6b21513af6`
 > Do NOT explore source — use this doc instead.
 
 ## Multi-instance
@@ -184,7 +184,11 @@ orderLine.remove()
 // Toggle drawing mode
 chart.setOverlayMode(mode)
 
-// Query/modify via klinecharts
+// Remove via SC API (preferred — routes through persistence pipeline; canvas/storage/modal stay in sync)
+chart.removeOverlay(overlayId)       // overlay id returned by createOverlay
+chart.removeIndicator("RSI")         // indicator type-name; no-op if not active
+
+// Query/modify via klinecharts (escape hatch — bypasses SC lifecycle; no autosave, no modal sync)
 chart.getChart().getOverlays({ paneId: "candle_pane" })
 chart.getChart().removeOverlay({ id: overlayId })
 chart.getChart().overrideOverlay({ id: overlayId, lock: true })
@@ -287,6 +291,48 @@ const storageAdapter = {
 
 To include the bundled system presets in your list responses, merge `SYSTEM_STUDY_TEMPLATES` / `SYSTEM_DRAWING_TEMPLATES` into the returned arrays. Hide these features with `disabledFeatures: ['study_templates', 'drawing_templates']`.
 
+### Chart templates — named full-chart layouts (new in 69a41cf)
+
+A "chart template" is a snapshot of a complete chart (indicators + overlays + styles
++ pane layout + preferences + symbol + period) saved under a name. Applying a
+template is a **full chart swap** — TV "Chart Layout" semantics, distinct from the
+per-overlay/per-indicator study and drawing templates above. The active template is
+tracked in `ChartState.activeChartTemplate`; with `auto_save_state` enabled, edits
+re-save the active template (`ea1dd96`).
+
+Enabled when: `chart_templates` feature flag is `true` AND the adapter implements
+`list/load/save/deleteChartTemplate` (rename/duplicate are optional and fall back to
+load+save+delete).
+
+```javascript
+const storageAdapter = {
+  // ... core methods + study + drawing template methods ...
+
+  async listChartTemplates() { return [] },                    // → ChartTemplateMeta[]
+  async loadChartTemplate(name) { return null },               // → ChartTemplate | null
+  async saveChartTemplate(name, template) { /* persist */ },
+  async deleteChartTemplate(name) { /* delete */ },
+  // Optional (SC falls back to load+save (+delete) if missing):
+  async renameChartTemplate(oldName, newName) { /* atomic rename */ },
+  async duplicateChartTemplate(name, newName) { /* atomic duplicate */ },
+}
+```
+
+Imperative usage:
+
+```javascript
+await sc.saveChartTemplate("Scalp")                  // snapshot current chart
+await sc.listChartTemplates()                        // → ChartTemplateMeta[]
+await sc.applyChartTemplate("Scalp")                 // restore — swaps symbol+period too
+await sc.renameChartTemplate("Scalp", "Day-trade")
+await sc.duplicateChartTemplate("Scalp", "Scalp 2")
+await sc.deleteChartTemplate("Scalp")
+```
+
+**Altrady note:** Keep `chart_templates` and `multi_chart_browser` disabled until the
+backend adapter implements the six chart-template methods. Until then leave them in
+`disabledFeatures`.
+
 ## Toolbar Customization
 
 Add custom buttons/dropdowns to the period bar:
@@ -379,7 +425,7 @@ try {
 await sc.resetView()
 ```
 
-Both calls are safe before the chart is ready — they wait for `onReady` internally. Both are also safe during an init load — they queue and drain when the load completes (latest call wins).
+Both calls are safe before the chart is ready — they wait for the API-ready signal internally (the same one `onApiReady` exposes). Both are also safe during an init load — they queue and drain when the load completes (latest call wins).
 
 `setVisibleRange` fetches missing history backward if `range.from` is before the loaded data buffer. This requires `dataLoader.getRange` to be present (it is, via `createDataLoader`).
 
@@ -391,11 +437,11 @@ Full upstream reference: `$SUPERCHART_DIR/docs/replay.md`.
 ### Accessing the engine
 
 `sc.replay` returns `ReplayEngine | null`. It is `null` until the internal klinecharts
-chart mounts (same timing as `getChart()`). Use `onReady` to gate access:
+chart mounts (same timing as `getChart()`). Use `onApiReady` to gate access:
 
 ```javascript
 // Wait for chart to be ready, then access replay
-sc.onReady(() => {
+sc.onApiReady(() => {
   wireReplay(sc.replay)
 })
 ```
@@ -498,9 +544,17 @@ new Superchart({
   ...,
   enabledFeatures:  ['crosshair_magnet'],
   disabledFeatures: ['study_templates', 'drawing_templates', 'chart_templates',
-                     'multi_chart_browser', 'auto_save_state'],
+                     'multi_chart_browser', 'auto_save_state',
+                     'settings_button', 'timezone_button'],
 })
 ```
+
+New flags in 69a41cf (`9adf04f`):
+
+- `settings_button` (default `true`) — hides the gear/settings button in the period bar
+- `timezone_button` (default `true`) — hides the timezone selector button in the period bar
+
+Both default ON; disable to reclaim toolbar space when the host app exposes its own settings/timezone UI.
 
 `disabledFeatures` wins when a flag appears in both lists. Toggle at runtime:
 
@@ -579,8 +633,9 @@ klinecharts `dispose()`, remove CSS classes, reset store. `destroy()` is an alia
 
 10. **getChart() may return null**: Before the internal klinecharts instance is
     mounted, `getChart()` returns null. Gate overlay operations behind a null check.
-    Use `sc.onReady(callback)` to run code once `getChart()` is guaranteed non-null.
-    If the chart is already ready, the callback fires immediately.
+    Use `sc.onApiReady(callback)` to run code once `getChart()` is guaranteed non-null.
+    If the chart is already mounted, the callback fires immediately. Use
+    `sc.onDataLoaded(callback)` instead when the code needs concrete bar data.
 
 11. **createButton/createDropdown before mount**: If called before React mounts,
     the calls are queued internally and replayed when `onApiReady` fires. The
@@ -604,7 +659,7 @@ klinecharts `dispose()`, remove CSS classes, reset store. `destroy()` is an alia
     (via `extendData`) on the overlays that should pass-through.
 
 15. **`sc.replay` is null until chart mounts**: Same timing as `getChart()` — the
-    klinecharts instance isn't available synchronously. Use `sc.onReady()` instead
+    klinecharts instance isn't available synchronously. Use `sc.onApiReady()` instead
     of polling with `setInterval`. The internal error→period-sync listener is
     registered automatically on first non-null read of `sc.replay` (idempotent).
 
@@ -639,3 +694,23 @@ klinecharts `dispose()`, remove CSS classes, reset store. `destroy()` is an alia
     call is therefore not instant even when the chart is already ready. Do not assume
     the chart has scrolled to the target range synchronously after `await` — the
     promise resolves only after the fetch completes and the range is applied.
+
+21. **`onReady` was split into `onApiReady` + `onDataLoaded`** (69a41cf): The single
+    pre-69a41cf `onReady` option and method no longer exist. Use `onApiReady` for
+    "chart instance exists" (toolbar/subscription wiring) and `onDataLoaded` for
+    "bars are loaded" (overlays at concrete timestamps, screenshots). Both forms
+    fire immediately if the milestone is already past and the method form returns
+    an unsubscribe function. Migrate prior `sc.onReady(...)` calls to `sc.onApiReady(...)`
+    unless the callback actually needs bar data — in which case prefer `onDataLoaded`.
+
+22. **`removeOverlay` / `removeIndicator` should go through the SC API**: Use
+    `sc.removeOverlay(id)` and `sc.removeIndicator(name)` rather than reaching into
+    `sc.getChart().removeOverlay(...)`. The SC methods route through the persistence
+    pipeline so canvas, storage, and the open settings modal stay in sync. The
+    klinecharts-level call still works but bypasses autosave and the modal.
+
+23. **Chart templates dirty the active template on edits**: When the user applies a
+    chart template, `ChartState.activeChartTemplate` is set. With `auto_save_state` on,
+    subsequent symbol/period/overlay/indicator changes re-save the template — not just
+    the chart state. If the host UI tracks "dirty template" state, treat any chart edit
+    while `activeChartTemplate` is set as a template-write event.

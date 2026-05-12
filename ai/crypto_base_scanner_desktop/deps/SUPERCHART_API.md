@@ -1,8 +1,8 @@
 # Superchart API Reference
 
 > Source: `$SUPERCHART_DIR` (branch: main)
-> Superchart git hash: `12e80deeeaf17476029f20be35137849ef8a43bc`
-> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `a502c7c910534d8375112f51a656a427bf09c09d`
+> Superchart git hash: `69a41cfaddf9e3dcb0a68d0d12ef29791b913374`
+> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `a9a761a37adada42a9c745e780b42b6b21513af6`
 > Do NOT explore source — use this doc instead.
 
 ## Multi-instance support
@@ -72,6 +72,7 @@ Also re-exports Superchart-specific types: `SuperchartOptions`, `SuperchartApi`,
 `ToolbarDropdownActionItem`, `ToolbarDropdownSeparator`, `Period`, `SymbolInfo`,
 `StorageAdapter`, `ChartState`, `StorageRecord`, `StorageWriteResult`, `StorageEntry`,
 `StudyTemplate`, `StudyTemplateMeta`, `DrawingTemplate`, `DrawingTemplateMeta`,
+`ChartTemplate`, `ChartTemplateMeta`,
 `SavedIndicator`, `ChartPreferences`,
 `IndicatorProvider`, `OverlayProperties`, `Datafeed`,
 `Bar`, `PeriodParams`, `HistoryMetadata`, `OrderLine`, `OrderLineProperties`,
@@ -123,9 +124,15 @@ Also re-exports Superchart-specific types: `SuperchartOptions`, `SuperchartApi`,
   onSelect?: (result: PriceTimeResult) => void          // fires on chart click (see gotchas — 250ms deferred)
   onRightSelect?: (result: PriceTimeResult) => void     // fires on chart right-click
   onDoubleSelect?: (result: PriceTimeResult) => void    // fires on chart double-click
-  onReady?: () => void                                   // fires when chart is fully initialized; getChart() guaranteed after this
+  onApiReady?: () => void                                // fires when React API mounts — getChart() non-null. Safe for subscriptions / toolbar buttons. Data not yet loaded.
+  onDataLoaded?: () => void                              // fires when first dataset resolves — safe to read getDataList() / place overlays at concrete timestamps
 }
 ```
+
+> The pre-69a41cf `onReady` option is gone. It has been split into `onApiReady`
+> (chart mounted but data may still be loading) and `onDataLoaded` (initial bars
+> resolved). Use `onApiReady` for subscriptions and toolbar wiring; use
+> `onDataLoaded` when the next step needs concrete bar data.
 
 ## SuperchartApi (instance methods)
 
@@ -161,7 +168,11 @@ onCrosshairMoved(callback: (result: PriceTimeResult) => void): () => void      /
 onSelect(callback: (result: PriceTimeResult) => void): () => void              // returns unsubscribe
 onRightSelect(callback: (result: PriceTimeResult) => void): () => void         // returns unsubscribe
 onDoubleSelect(callback: (result: PriceTimeResult) => void): () => void        // returns unsubscribe
-onReady(callback: () => void): () => void          // fires immediately if already ready; returns unsubscribe
+onApiReady(callback: () => void): () => void       // fires when React API mounts (getChart() non-null); fires immediately if already mounted; returns unsubscribe
+onDataLoaded(callback: () => void): () => void     // fires when first dataset resolves; fires immediately if already loaded; returns unsubscribe
+// Indicator/overlay removal — routed through the persistence pipeline (canvas + storage + modal kept in sync)
+removeIndicator(name: string): void                // by indicator type-name (e.g. "RSI", "MACD"); no-op if not active
+removeOverlay(id: string): void                    // by overlay id from createOverlay; transient (save:false) overlays removed from canvas only
 setVisibleRange(range: VisibleTimeRange): Promise<void>
 // Async. Waits for chart ready. VisibleTimeRange uses unix SECONDS.
 // Fetches missing history via dataLoader.getRange if range.from is before loaded data.
@@ -179,6 +190,15 @@ saveState(): Promise<void>                         // force-save, last-write-win
 loadState(): Promise<void>                         // re-fetch and re-apply from adapter
 clearState(): Promise<void>                        // delete remote record; chart visual unchanged
 listSavedStates(prefix?: string): Promise<StorageEntry[]>
+
+// Chart templates (named full-chart layouts — TV "Chart Layout" semantics)
+// UI is shown when the adapter implements the *ChartTemplate methods AND the `chart_templates` flag is enabled.
+listChartTemplates(): Promise<ChartTemplateMeta[]>
+saveChartTemplate(name: string): Promise<void>        // snapshot current chart incl. symbol+period
+applyChartTemplate(name: string): Promise<void>       // restores indicators/overlays/styles/symbol/period; full chart swap
+renameChartTemplate(oldName: string, newName: string): Promise<void>      // atomic if adapter supports it; otherwise load+save+delete fallback
+duplicateChartTemplate(name: string, newName: string): Promise<void>      // atomic if adapter supports it; otherwise load+save fallback
+deleteChartTemplate(name: string): Promise<void>
 
 // Feature flags
 isFeatureEnabled(flag: FeatureFlag): boolean
@@ -397,6 +417,14 @@ interface StorageAdapter {
   loadDrawingTemplate?(toolName: string, name: string): Promise<DrawingTemplate | null>
   saveDrawingTemplate?(toolName: string, name: string, template: DrawingTemplate): Promise<void>
   deleteDrawingTemplate?(toolName: string, name: string): Promise<void>  // system names must throw / 403
+
+  // Chart templates (named full-chart layouts — optional; UI hidden when list/load/save/delete are missing)
+  listChartTemplates?(): Promise<ChartTemplateMeta[]>
+  loadChartTemplate?(name: string): Promise<ChartTemplate | null>
+  saveChartTemplate?(name: string, template: ChartTemplate): Promise<void>
+  deleteChartTemplate?(name: string): Promise<void>
+  renameChartTemplate?(oldName: string, newName: string): Promise<void>     // atomic; SC falls back to load+save+delete if absent
+  duplicateChartTemplate?(name: string, newName: string): Promise<void>     // atomic; SC falls back to load+save if absent
 }
 ```
 
@@ -435,7 +463,7 @@ interface LocalStorageAdapterOptions {
   storage?: Storage  // override for test / non-browser environments
 }
 ```
-Stores chart state at `${prefix}${key}`. Study templates at `${prefix}study-template:${name}`. Drawing templates at `${prefix}drawing-template:${toolName}:${name}`. Merges `SYSTEM_STUDY_TEMPLATES` / `SYSTEM_DRAWING_TEMPLATES` into list responses. Saving over a system name creates a user copy that shadows it; deleting a pure system name throws.
+Stores chart state at `${prefix}${key}`. Study templates at `${prefix}study-template:${name}`. Drawing templates at `${prefix}drawing-template:${toolName}:${name}`. Chart templates at `${prefix}chart-template:${name}`. Merges `SYSTEM_STUDY_TEMPLATES` / `SYSTEM_DRAWING_TEMPLATES` into list responses. Saving over a system name creates a user copy that shadows it; deleting a pure system name throws. Implements all template families including `list/load/save/delete/rename/duplicateChartTemplate`.
 
 ### HttpStorageAdapter
 ```typescript
@@ -456,6 +484,14 @@ REST contract rooted at `baseUrl`:
 
 Study templates at `{baseUrl-parent}/study-templates`, drawing templates at `{baseUrl-parent}/drawing-templates/:toolName`. System names return 403 on delete.
 
+Chart templates rooted at `{baseUrl-parent}/chart-templates`:
+- `GET    {baseUrl-parent}/chart-templates` → 200 `ChartTemplateMeta[]`
+- `GET    {baseUrl-parent}/chart-templates/:name` → 200 `ChartTemplate` | 404
+- `PUT    {baseUrl-parent}/chart-templates/:name` body `ChartTemplate` → 204
+- `DELETE {baseUrl-parent}/chart-templates/:name` → 204 | 404 (treated as success)
+- `POST   {baseUrl-parent}/chart-templates/:name/rename` body `{newName}` → 204 | 409
+- `POST   {baseUrl-parent}/chart-templates/:name/duplicate` body `{newName}` → 204 | 409
+
 ### ChartState
 ```typescript
 interface ChartState {
@@ -469,6 +505,8 @@ interface ChartState {
   symbol?: string
   period?: string
   overlayDefaults?: Record<string, DeepPartial<OverlayProperties>>
+  activeChartTemplate?: string            // name of last applied/saved chart template; shown in the period bar dropdown
+  userFeatureOverrides?: Record<string, boolean>  // user toggle overrides (e.g. auto_save_state) persisted across reloads
 }
 ```
 
@@ -536,6 +574,30 @@ Composite key is `(toolName, name)` — independent per tool.
 `SYSTEM_DRAWING_TEMPLATES`: 4 presets (Bullish trendline, Bearish trendline, Support line, Resistance line).
 UI shown when: `drawing_templates` feature flag is `true` AND adapter implements all 4 drawing-template methods.
 
+### ChartTemplateMeta / ChartTemplate (new in 69a41cf)
+```typescript
+interface ChartTemplateMeta {
+  name: string
+  savedAt?: number
+  symbol?: string          // ticker — shown in the dropdown
+  period?: string          // period.text — shown in the dropdown
+}
+
+interface ChartTemplate {
+  name: string
+  savedAt?: number
+  indicators: SavedIndicator[]
+  overlays: SavedOverlay[]
+  styles: DeepPartial<Styles>
+  paneLayout: PaneLayout[]
+  preferences: ChartPreferences
+  overlayDefaults?: Record<string, DeepPartial<OverlayProperties>>
+  symbol?: SymbolInfo                                // restored via setSymbol() on apply
+  period?: Period                                    // restored via setPeriod() on apply
+}
+```
+A `ChartTemplate` is a complete snapshot of a chart (TV "Chart Layout" semantics). Applying one swaps everything including symbol+period. SC tracks the active template in `ChartState.activeChartTemplate` and re-saves into it on overlay/indicator/symbol/period changes when auto-save is on (`ea1dd96`). UI shown when: `chart_templates` feature flag is `true` AND adapter implements `list/load/save/deleteChartTemplate`.
+
 ### OverlayProperties
 ```typescript
 { style, text, textColor, textFont, textFontSize, textFontWeight, textBackgroundColor,
@@ -583,10 +645,12 @@ type FeatureFlag =
   | 'auto_save_state'     // default true — when false, no adapter writes; must call saveState() manually
   | 'study_templates'     // default true — UI shown when adapter also implements all 4 study template methods
   | 'drawing_templates'   // default true — UI shown when adapter also implements all 4 drawing template methods
-  | 'chart_templates'     // default true (reserved)
+  | 'chart_templates'     // default true — UI shown when adapter implements list/load/save/deleteChartTemplate
   | 'multi_chart_browser' // default true (reserved)
   | 'volume_in_legend'    // default true
   | 'last_close_price_line' // default true
+  | 'settings_button'     // default true — gear/settings button in the period bar
+  | 'timezone_button'     // default true — timezone selector button in the period bar
 ```
 `disabledFeatures` wins over `enabledFeatures` when a flag appears in both.
 `drawing_bar` / `period_bar` flags control availability (binary); `drawingBarVisible` / `periodBarVisible` options control current visibility state (user-toggleable). Toolbar shows only when flag is `true` AND visibility is `true`.
@@ -1051,7 +1115,7 @@ To replace the built-in screenshot behavior with custom logic (e.g., upload + sh
 
 - Both methods are now `async` and return `Promise<void>`. Always `await` them or handle the rejection.
 - `setVisibleRange` uses `VisibleTimeRange` (unix **seconds**). The coinray-chart layer takes ms — the Superchart wrapper multiplies by 1000 automatically.
-- Both are safe to call before the chart is ready — they wait for `onReady` internally.
+- Both are safe to call before the chart is ready — they wait for the API-ready signal internally (the same one `onApiReady` exposes).
 - Both are queued during an in-flight init load. Only the latest queued call is applied when the load completes; earlier queued calls resolve without effect.
 - `setVisibleRange` fetches missing history backward via `dataLoader.getRange` if `range.from` is before the loaded buffer. Requires `getRange` to be present on the DataLoader (see `SuperchartDataLoader` above).
 - The `last_bar` zoom anchor is now clamped to the viewport — zooming while scrolled left no longer jumps the viewport. No API change, just a behavioral fix.
@@ -1076,6 +1140,32 @@ Optional handler. Fires with historical backfill data. Unlike `onData` (which cl
 `createOverlay` now accepts `save?: boolean` (default `true`). Set `save: false` for transient overlays that should render on the chart but never be written to the `StorageAdapter` or restored on reload. Mirrors TradingView's `disableSave`.
 
 Altrady note: All fluent-factory overlays (`createOrderLine`, `createPriceLine`, `createTradeLine`) never save by design — they bypass SC's overlay lifecycle entirely. Any new `superchart.createOverlay(...)` calls for app-driven transient overlays (e.g. replay cursor, measurement tool) should pass `{ save: false }`.
+
+## Chart-Ready Milestones (69a41cf — `6bc991c`)
+
+The single pre-69a41cf `onReady` callback was split into two milestones, both available as options and as instance methods:
+
+| Milestone | When it fires | Safe to do |
+|---|---|---|
+| `onApiReady` | React API mounts; `getChart()` becomes non-null | subscribe to events, `createButton`/`createDropdown`, read/write feature flags, call `setSymbol`/`setPeriod`, access `sc.replay` |
+| `onDataLoaded` | first dataset resolves and is in `getDataList()` | read concrete bars, place overlays at specific timestamps, snapshot via `getScreenshotUrl`, call `setVisibleRange` against known data |
+
+Both forms (option and method) fire immediately if the milestone has already been reached, and the method form returns an unsubscribe function. Migration: replace every `onReady` with `onApiReady` unless the next step needs bar data — in which case use `onDataLoaded`.
+
+## Chart Templates (69a41cf — `f43f048`, `98c1446`, `ea1dd96`)
+
+Chart templates are named full-chart snapshots persisted via `StorageAdapter.*ChartTemplate` (TV "Chart Layout" semantics — distinct from study/drawing templates which act per-overlay/per-indicator).
+
+- Six imperative methods on `SuperchartApi`: `list/save/apply/rename/duplicate/deleteChartTemplate` — see SuperchartApi block above.
+- `applyChartTemplate` is a full chart swap: indicators, overlays, styles, pane layout, preferences, symbol, period.
+- `saveChartTemplate(name)` snapshots the current chart (including `symbol`+`period`).
+- `rename`/`duplicate` use adapter atomic methods if implemented; otherwise SC falls back to a load+save (+delete) sequence.
+- Active template is tracked in `ChartState.activeChartTemplate`. When auto-save is on and `activeChartTemplate` is set, symbol/period/overlay/indicator edits dirty the template and re-save it (`ea1dd96`).
+- UI is gated on the `chart_templates` feature flag AND `list/load/save/deleteChartTemplate` being present on the adapter.
+
+## Indicator/Overlay Removal API (69a41cf — `1c05e9e`)
+
+`sc.removeIndicator(name)` and `sc.removeOverlay(id)` are the canonical removal APIs. They route through the persistence pipeline so canvas, `StorageAdapter`, and the open indicator/overlay modal all update together. Direct `sc.getChart().removeOverlay(...)` still works but bypasses SC's lifecycle (no autosave, no modal sync) — use only for klinecharts-native overlays that SC doesn't track.
 
 ## Known Limitations
 
