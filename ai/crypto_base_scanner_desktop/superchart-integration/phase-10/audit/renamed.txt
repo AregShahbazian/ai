@@ -1,0 +1,8 @@
+R098	src/containers/trade/trading-terminal/quiz/quiz-context.js	src/containers/quizzes/quiz-context.js
+R078	src/containers/trade/trading-terminal/quiz/use-quiz.js	src/containers/quizzes/use-quiz.js
+R088	src/containers/trade/trading-terminal/widgets/center-view/tradingview/action-buttons.js	src/containers/trade/trading-terminal/widgets/super-chart/action-buttons.js
+R099	src/containers/trade/trading-terminal/widgets/center-view/tradingview/settings/chart-color-picker.js	src/containers/trade/trading-terminal/widgets/super-chart/chart-settings/chart-color-picker.js
+R063	src/containers/trade/trading-terminal/widgets/center-view/tradingview/settings/general-settings.js	src/containers/trade/trading-terminal/widgets/super-chart/chart-settings/general-settings.js
+R073	src/containers/trade/trading-terminal/widgets/center-view/tradingview/controllers/replay/backtest.js	src/containers/trade/trading-terminal/widgets/super-chart/replay/backtest.js
+R063	src/containers/trade/trading-terminal/widgets/center-view/tradingview/replay/pick-replay-start-button.js	src/containers/trade/trading-terminal/widgets/super-chart/replay/pick-replay-start-button.js
+R074	src/containers/trade/trading-terminal/widgets/center-view/tradingview/replay/replay-controls.js	src/containers/trade/trading-terminal/widgets/super-chart/replay/replay-controls.js
