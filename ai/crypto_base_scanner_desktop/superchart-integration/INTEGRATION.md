@@ -604,40 +604,58 @@ The app uses TradingView charts in multiple places beyond the main Trading Termi
 
 ---
 
-### Phase 10: CandleChart Migration ✅ (coexistence removed)
+### Phase 10: CandleChart Migration ✅ + TV/SC Coexistence ✅
 
 **History:** Phase 10 originally introduced a TV/SC coexistence layer — a
 toggleable `CandleChart` widget, a dev-widget guard, and a layout migration
 from `CenterView` to `CandleChart`. The coexistence pieces (toggle UI,
 `useSuperChart` Redux state, `DevWidgetGuard`) were removed in Phase 5 when
-the Trading Terminal switched to SC-only. What remains from Phase 10 is
-the layout migration and the `CandleChart` wrapper. After
-`[sc-charts-page]` shipped, `CandleChart` is a thin TT-only wrapper that
-always renders the SC `TradingTerminalChartWithProvider` (no `toggleable`
-branch, no TV path). /charts mounts `ChartsPageChartWidget` directly via
-`ChartsGridItem`.
+the Trading Terminal switched to SC-only. After `[sc-charts-page]` shipped,
+TV was effectively removed from all surfaces.
 
-See `phase-10/review.md` for the full list of Phase-10 pieces that were
-undone.
+**Then TV came back.** The `[sc-tv-coex]` series (`tv-coex-plan.md` →
+`phase-10/progress.md`) restored TradingView alongside SuperChart, gated
+by a global `chartSettings.chartProvider` flag (`TRADINGVIEW` |
+`SUPERCHART`, default `SUPERCHART`). 87 TV files were restored
+byte-identical to BASE (`5.3.x` merge-base); shared files became
+additive (TV restored + SC kept); the wrapper components branch on
+provider at render time. The result: SC is the default; users (and
+controllers/thunks) can flip to TV at runtime, no reload required.
 
-#### 10a. CandleChart wrapper ✅ (TT-only)
+See `phase-10/tv-coex-plan.md` for the restoration plan and
+`phase-10/progress.md` for the per-commit log. `phase-10/review.md`
+still documents the original Phase-10-pieces-that-were-undone history.
 
-After `[sc-charts-page]` shipped, `CandleChart` is a TT-only wrapper that
-always renders `TradingTerminalChartWithProvider` (SC). The `toggleable`
-prop and the TV branch are gone.
+#### 10a. CandleChart wrapper ✅ (provider-branched)
 
-- **TT:** mounts SC via `CandleChart` from the FlexLayout grid.
-- **Charts page:** mounts `ChartsPageChartWidget` directly via
-  `ChartsGridItem` — no `CandleChart` indirection.
-- **Other pages** (quiz, customer service, shared bots, grid bots) mount
-  their chart widgets directly.
+`CandleChart` is the TT entry point and branches on
+`useChartProvider()`:
+
+- `CHART_PROVIDER.TRADINGVIEW` → mounts the restored
+  `CenterViewWidget` (TV).
+- `CHART_PROVIDER.SUPERCHART` → mounts
+  `TradingTerminalChartWithProvider` (SC).
+
+- **TT:** mounts `CandleChart` from the FlexLayout grid; widget swaps
+  via `chartProvider`.
+- **Charts page:** `ChartsGridItem` branches on `chartProvider` —
+  mounts `ChartsPageChartWidget` (SC) or `CenterViewWidget` (TV).
+- **Other pages** (quiz, customer service, shared bots, grid bots)
+  mount provider-branched wrappers (`customer-service-chart.js`,
+  `grid-bot-chart.js`, `quiz-question-chart.js`) that render the
+  TV or SC chart per `chartProvider`.
+
+The provider flip is a hot swap (React unmount/remount of the chart
+subtree). `switchChartProvider` thunk first confirms via a Yes/No
+modal if a replay session is active in the outgoing lib, then tears
+the session down before flipping the flag.
 
 #### 10b. ~~SC Single-Instance Guard~~ (removed)
 
-The `DevWidgetGuard` and standalone `SuperChart` dev widget were removed
-from the grid layout. The Trading Terminal now has exactly one SC instance
-(inside `CandleChart`); legacy layouts with `SuperChart` nodes resolve to
-`UnknownWidget`.
+The `DevWidgetGuard` and standalone `SuperChart` dev widget were
+removed from the grid layout. The TT now has exactly one chart
+instance per layout (inside `CandleChart`); legacy layouts with
+`SuperChart` nodes resolve to `UnknownWidget`.
 
 #### 10c. Layout Migration ✅
 
@@ -653,49 +671,69 @@ from the grid layout. The Trading Terminal now has exactly one SC instance
   `grid-item-settings.js`, `grid-item-refresh.js`, translations. Only remains
   in migration/legacy code.
 
-#### 10d. Screenshots ✅
+(The migration still applies — `CandleChart` is the single TT chart
+entry regardless of which provider is rendered inside.)
 
-Notes screenshots are SC-only via `ChartRegistry.getActive()`. In the
-Trading Terminal this always succeeds since `CandleChart` always renders
-SC. The "Toggle to SuperChart" fallback path no longer triggers in TT.
-Warning when no SC is active (no CandleChart in layout): yellow warning
-"Activate the Chart widget" with widget dropdown highlight.
+#### 10d. Screenshots ✅ (provider-branched)
 
-#### 10e. ~~TV Feature Restoration~~ (no longer applicable)
+`notes-form.takeScreenshot` branches on `chartProvider`:
+- TV → `tvTakeScreenshot` (uses TV's screenshot path, restored).
+- SC → `scTakeScreenshot` via `ChartRegistry.getActive()`.
 
-The TV feature restoration table (grid bot pages, screenshots, hotkeys)
-was relevant only while TV and SC coexisted in the TT. Since Phase 5
-decommissioned TV from the TT entirely, these items are either resolved
-(grid bots are SC-only, screenshots are SC-only, hotkeys migrated in
-Phase 4) or moot.
+The SC path still shows the "Activate the Chart widget" yellow warning
+when no SC `CandleChart` is active in the layout. The TV path uses
+TV's pre-existing screenshot mechanism.
 
-#### 10f. TV Removal (in progress, pre-release)
+#### 10e. TV/SC Coexistence — restored surfaces ✅
 
-Trading Terminal: ✅ done (Phase 5 decommission). Charts page: ✅ done
-(`[sc-charts-page]`). Remaining TV consumers are non-TT contexts (quizzes,
-customer service, training, market explorer). Full removal before release:
+All surfaces that need to support both libs:
 
-1. ✅ `chartSettings.useSuperChart` Redux state removed
-2. ✅ `DevWidgetGuard` and standalone `SuperChart` dev widget removed
-3. ✅ Migrate Charts page (`[sc-charts-page]`): `CandleChart` is now TT-only
-   (always SC), and /charts mounts `ChartsPageChartWidget` directly
-4. ✅ Migrate remaining TV consumers — quiz (`[sc-quiz]`), CS
-   (`[sc-customer-service-charts]`), training (route removed). Market
-   explorer is HighCharts, not TV.
-5. ✅ Delete `vendor/tradingview/` (folder gone)
-6. ✅ Remove CopyWebpackPlugin entry for tradingview
-7. **Pending** — `center-view/tradingview/` directory still has
-   `controllers/data-provider.js` plus a few leaf files. Sweep before
-   release.
-8. **Pending** — `DataProvider` (still in `tradingview/controllers/`),
-   `SymbolsStorage`, `SaveLoadAdapter`, `ChartFunctions` cleanup. Some
-   may already be unused — grep + delete.
-9. **Pending** — `ChartContext` / `VisibleRangeContext` audit; remove if
-   no live consumers remain.
-10. **Pending** — TV chart-version management in `actions/chart-settings.js`.
-11. **Pending** — `visibleRange` (duration-in-seconds) → rename
-    `visibleRangeFromTo` → `visibleRange` (`{from, to}`) on the market-tab
-    state.
+| Surface | TV mount | SC mount | Branch point |
+|---------|----------|----------|--------------|
+| Trading Terminal chart | `CenterViewWidget` | `TradingTerminalChartWithProvider` | `CandleChart` |
+| Charts page | `CenterViewWidget` | `ChartsPageChartWidget` | `ChartsGridItem` |
+| Grid-bot pages (overview + settings) | `GridBotTradingWidget` | `GridBotChartWidget` (SC) | `grid-bot-chart.js` wrapper |
+| Quiz `/quizzes` | TV chart via `tvSetup` | SC quiz chart | `quiz-question-chart.js` |
+| Customer-service charts | TV customer-service chart | SC counterpart | `customer-service-chart.js` |
+| Chart-settings preview | TV preview (`TradingPreview`) | SC preview (`PreviewChart`) | `preview-chart.js` (per-section configs in `super-chart/preview/preview-tab-configs.js`) |
+| Notes screenshot | TV screenshot | SC screenshot via `ChartRegistry.getActive()` | `notes-form.takeScreenshot` |
+
+State / datafeed reconciliation:
+- **Replay state**: Redux `replay` reducer unions TV's
+  `replayContextGlobal` with SC's per-chartId `sessions` map.
+- **Price/time offsets**: 4 callsites use the pattern
+  `ChartRegistry.get(id)?.getXxxOffset() ?? getTvXxxOffset() ??
+  <default>` — SC-first so TV's module-level stale state can't
+  pollute after a TV→SC flip.
+- **`market-tab.getPriceOverrides()`**: dual-mode — TV reads
+  `replay.replayContextGlobal.price` (BASE pattern, symbol-guarded);
+  SC keeps per-tab session.
+- **Quiz controller**: single `QuizController` exposes both
+  `animation` (SC) and `draw` (TV); question controllers dispatch on
+  `chartSettings.chartProvider`; TV-path entry points `await
+  draw.loadTv()` so TV's `onChartReady` becomes a hard dependency.
+
+#### 10f. ~~TV Removal~~ (deferred — TV stays as toggleable provider)
+
+The pre-release TV removal agenda from the original Phase-10 plan
+(items 7–11: sweep `tradingview/` leftovers, audit
+`ChartContext`/`VisibleRangeContext`, drop TV chart-version
+management, rename `visibleRange`) is **no longer in scope**. TV is
+now a supported provider; its files at TV paths are held
+**byte-identical to BASE** as a hard rule (with two documented
+relaxations — `tradingpreview.js` and
+`tradingview/controllers/dummy-data-provider.js` for the per-section
+TV preview follow-up). Future cleanups against `tradingview/` must
+be additive at non-BASE paths.
+
+Items that did land (still done): `chartSettings.useSuperChart`
+removal (replaced by `chartProvider`), `DevWidgetGuard` removal,
+charts-page migration, quiz/CS/training migrations, deleting
+`vendor/tradingview/` and its webpack copy entry — most of which
+have since been **partly undone** by the coex restoration
+(`vendor/tradingview/` and the CopyWebpackPlugin entry are back;
+TV's `controllers/`, `ChartContext`, etc. are back at their BASE
+paths).
 
 ---
 
@@ -864,7 +902,6 @@ Items that were attempted or considered but need more work. Check back on these 
   `registerIndicator()`. Tracked in `SUPERCHART_BACKLOG.md` #8.
 - **General chart-layout persistence** (Phase 6, non-quiz) — no
   app-wide StorageAdapter wired yet; only `QuizStorageAdapter` exists.
-- **TV cleanup sweep** (Phase 10f items 7–11) — `tradingview/`
-  directory leftovers (`controllers/data-provider.js` etc.),
-  `ChartContext` / `VisibleRangeContext` audit, market-tab
-  `visibleRange` rename. Pre-release task list.
+- ~~**TV cleanup sweep**~~ (Phase 10f items 7–11) — **no longer
+  in scope.** TV stays as a toggleable provider, files held
+  byte-identical to BASE; see Phase 10f.

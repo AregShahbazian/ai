@@ -1,13 +1,19 @@
 # TV → SC Port Coverage Map
 
-Audit of what the TV implementation in `5.3.x` did, split by **Ported to SC**
-and **Not ported**. Source files are 5.3.x paths under
-`src/containers/trade/trading-terminal/widgets/center-view/tradingview/` unless
-noted.
+**Status quo (post `[sc-tv-coex]`):** TV and SC now coexist in the app.
+`chartSettings.chartProvider` (default `superchart`) switches the active
+chart at runtime via `CandleChart` → either `MainChartTradingWidget` (TV)
+or `TradingTerminalChartWithProvider` (SC). The entire TV tree under
+`src/containers/trade/trading-terminal/widgets/center-view/tradingview/`
+is live again — the "Not Ported" items below currently work via TV; SC
+falls back to TV for them until each is built natively in SC.
+
+This doc audits what SC covers vs. what is still TV-only. Source paths are
+the live (5.3.x-restored) `center-view/tradingview/` tree unless noted.
 
 ---
 
-## Ported
+## Ported (works in both TV and SC)
 
 Core chart container & lifecycle (init, datafeed, theme, symbol/period sync,
 visible-range sync, ready gating, symbol search).
@@ -74,51 +80,72 @@ flow, fullscreen landscape layout.
 
 ---
 
-## Not Ported
+## Not Ported (TV-only — needs SC implementation)
 
-### Custom indicators — **24 PineJS studies, none ported**
+Each item below currently runs through the restored TV widget when the user
+is on `chartProvider = tradingview`. SC users do not get these features yet.
+
+### 1. Custom indicators — **24 PineJS studies, none ported**
 INTEGRATION.md says "4 custom indicators" — actually understated. Lives in
 `controllers/ci.js` (20 inline) + `controllers/ci/*.js` (4 files):
-- From `controllers/ci/`: `rsiStoch`, `previousCandleOutliers`, `smartMoney`
-  (feature-gated `essential_indicators`), `liquidations` (feature-gated)
-- From `controllers/ci.js` inline: `Willams21EMA13`, `Trend Trigger Factor
-  [LazyBear]`, `Relative Momentum Index`, `CM_Enhanced_Ichimoku Cloud-V5`,
-  `True Strength Index [LazyBear]`, `On Balance Volume EMA-13`,
-  `CM_Williams_Vix_Fix`, `CM_EMA Trend Bars`, `CM_Double EMA Trend Color`,
-  `Bitcoin Kill Zones v2 [oscarvs]`, `Fisher Transform Indicator by Ehlers`,
-  `Squeeze Momentum Indicator [LazyBear]`, `CM_SlingShotSystem`,
-  `CM_Pivot Bands V1`, `Almost Zero Lag EMA [LazyBear]`,
-  `On Balance Volume Oscillator [LazyBear]`, `SuperTrend BF`,
-  `Exponential Bollinger Bands`, `WaveTrend [LazyBear]`,
-  `KDJ Indicator - iamaltcoin`
+- **1a.** `rsiStoch` — `controllers/ci/rsi-stoch.js`
+- **1b.** `previousCandleOutliers` — `controllers/ci/previous-candle-outliers.js`
+  (emits custom shapes via `updateCustomIndicators`)
+- **1c.** `smartMoney` — `controllers/ci/smart-money.js`
+  (feature-gated `essential_indicators`, emits custom shapes)
+- **1d.** `liquidations` — `controllers/ci/liquidations.js`
+  (feature-gated `essential_indicators`, emits custom shapes + dashboard data)
+- **1e.** `Willams21EMA13`
+- **1f.** `Trend Trigger Factor [LazyBear]`
+- **1g.** `Relative Momentum Index`
+- **1h.** `CM_Enhanced_Ichimoku Cloud-V5`
+- **1i.** `True Strength Index [LazyBear]`
+- **1j.** `On Balance Volume EMA-13`
+- **1k.** `CM_Williams_Vix_Fix`
+- **1l.** `CM_EMA Trend Bars`
+- **1m.** `CM_Double EMA Trend Color`
+- **1n.** `Bitcoin Kill Zones v2 [oscarvs]`
+- **1o.** `Fisher Transform Indicator by Ehlers Strategy`
+- **1p.** `Squeeze Momentum Indicator [LazyBear]`
+- **1q.** `CM_SlingShotSystem`
+- **1r.** `CM_Pivot Bands V1`
+- **1s.** `Almost Zero Lag EMA [LazyBear]`
+- **1t.** `On Balance Volume Oscillator [LazyBear]`
+- **1u.** `SuperTrend BF`
+- **1v.** `Exponential Bollinger Bands`
+- **1w.** `WaveTrend [LazyBear]`
+- **1x.** `KDJ Indicator - iamaltcoin`
 
-### Custom-indicator support overlays (consumers of the above)
-- **Liquidations Dashboard** (`liquidations-dashboard.js`) — floating panel
-  showing which leverage tiers (5x/10x/25x/50x/100x) are active. Pulls from
-  `customIndicators` ChartContext entry; tied to the Liquidations indicator.
-- **Custom-indicator shapes** (`custom-indicators.js`) — generic React
+### 2. Custom-indicator support overlays (consumers of #1)
+- **2a. Liquidations Dashboard** (`liquidations-dashboard.js`) — floating
+  panel showing which leverage tiers (5x/10x/25x/50x/100x) are active.
+  Pulls from `customIndicators` ChartContext entry; tied to **1d**.
+- **2b. Custom-indicator shapes** (`custom-indicators.js`) — generic React
   component that takes shape drawings emitted by custom indicators
   (`updateCustomIndicators` callback) and renders them on the chart.
-  Used by `previousCandleOutliers`, `smartMoney`, `liquidations`.
+  Used by **1b**, **1c**, **1d**.
 
-### TradingView Enhancements (`tradingview-enhancements.js` + folder)
+### 3. TradingView Enhancements (`tradingview-enhancements.js` + folder)
 TV iframe-DOM-injection layer that added buttons to TV's floating drawing
 toolbar when a drawing is selected.
-- **Drawing template save/load/apply** — Save Drawing Template As / Apply
-  Default Drawing Template / list+apply+delete saved templates per tool name.
-  Uses `loadTemplates`/`deleteTemplate` from `actions/chart-settings`.
-  Modal: `tradingview-enhancements/drawing_template_modal.js`.
-- **Trendline-to-alert conversion** — bell icon on `LineToolTrendLine` /
-  `LineToolRay` selection that converts the drawn line into a trend-line
+- **3a. Drawing template save/load/apply** — Save Drawing Template As /
+  Apply Default Drawing Template / list+apply+delete saved templates per
+  tool name. Uses `loadTemplates`/`deleteTemplate` from
+  `actions/chart-settings`. Modal:
+  `tradingview-enhancements/drawing_template_modal.js`.
+- **3b. Trendline-to-alert conversion** — bell icon on `LineToolTrendLine`
+  / `LineToolRay` selection that converts the drawn line into a trend-line
   alert (uses `trend_line_alerts` feature gate). Hooks up replay's
   `currentTime` to compute direction.
-- Selection / delete plumbing: `getSelectedEntities`, `onSelectionChanged`,
-  `clickDelete`, `createToolbarPlaceholder`, `createToolbarButton`.
-- `useToolbarVisibility` — MutationObserver-based detection of TV's drawing
-  toolbar visibility.
+- **3c. Selection / delete plumbing** — `getSelectedEntities`,
+  `onSelectionChanged`, `clickDelete`, `createToolbarPlaceholder`,
+  `createToolbarButton`.
+- **3d. `useToolbarVisibility`** — MutationObserver-based detection of TV's
+  drawing toolbar visibility.
+
 *(Backlog item #12 — explicitly deferred.)*
 
-### Generic chart-layout persistence (non-quiz)
+### 4. Generic chart-layout persistence (non-quiz)
 TV had server-side `SaveLoadAdapter` against `/api/v2/tradingview_charts`
 saving drawings + studies + chart templates + study templates + line tools
 groups (auto-save via `onAutoSaveNeeded`), plus `LocalSaveLoadAdapter` for
@@ -126,7 +153,7 @@ non-trading users. SC only has `QuizStorageAdapter`. TT, /charts, grid-bot,
 preview don't persist drawings/indicators across reloads.
 *(Pending — INTEGRATION.md Phase 6.)*
 
-### Chart-style settings save-back from chart UI
+### 5. Chart-style settings save-back from chart UI
 TV's `saveColors` extracted `paneProperties`, `scalesProperties`,
 `mainSeriesProperties` from `tvWidget.save((state)=>{})` after each
 auto-save, diffed against `getOverrides(colors)`, and persisted changes back
@@ -135,62 +162,30 @@ through TV's own settings UI flowed back into Redux. SC only persists via
 the React Chart Settings modal. (`onTimezoneChange` is the SC backlog
 representative.)
 
-### Resume-from-background data reset
+### 6. Resume-from-background data reset
 `use-trading-view.js` listened on `visibilitychange` +
 `MobileMessageTypes.FOREGROUND_STATE` and called `datafeed.resetData()` to
 re-fetch candles when the tab/app returned from background. Not in SC.
 
-### Callout overlay
-`callout.js` — text-label callout drawn near a candle using TV's `callout`
-shape. Used in quiz **preview mode** to draw a "Decision point" label at
-`question.solutionStart`. SC port only renders the `DecisionPointArrow`,
-not the text label. `chartFunctions.createCallout()` also gone.
-
-### MultipointDrawings generic shape overlay
-`multipoint-drawings.js` — generic component to render arbitrary multi-point
-shape arrays. Consumed by `quiz/questions-drawings.js` to draw saved
-`questionDrawings` / `hintDrawings` / `solutionDrawings` (the shape arrays
-themselves are not what SC quiz-persistence saves — SC saves SC overlays via
-StorageAdapter). Functionally replaced by StorageAdapter, but the generic
-"render this shape array" capability is gone.
-
-### `tvVersion` / chart-version picker
-`settings/general-settings.js` exposed a dropdown to switch between TV
-charting-library versions (`CHART_VERSIONS`), persisted in `tvVersion`.
-Field still exists in Redux state for the SC library load path, but the
-UI picker is gone.
-
-### TV-only widget options that had no SC equivalent set
+### 7. TV-only widget options that had no SC equivalent set
 From `controllers/setup.js`:
-- `drawings_access: {type: "black", tools: [{name: "Regression Trend"}]}` —
-  blocked the Regression Trend drawing tool from the toolbar
-- `study_templates` enabled feature
-- `show_symbol_logos`, `show_exchange_logos`, `show_symbol_logo_in_legend`
-- `seconds_resolution` / `custom_resolutions`
-- `determine_first_data_request_size_using_visible_range`
-- `header_fullscreen_button` (disabled on mobile)
-- `snapshot_url` — server-side snapshot endpoint
-  (`/api/v2/tradingview_charts/snapshot?user_id=…`). Screenshots are now
+- **7a.** `drawings_access: {type: "black", tools: [{name: "Regression
+  Trend"}]}` — blocked the Regression Trend drawing tool from the toolbar
+- **7b.** `study_templates` enabled feature
+- **7c.** `show_symbol_logos`, `show_exchange_logos`,
+  `show_symbol_logo_in_legend`
+- **7d.** `seconds_resolution` / `custom_resolutions`
+- **7e.** `determine_first_data_request_size_using_visible_range`
+- **7f.** `header_fullscreen_button` (disabled on mobile)
+- **7g.** `snapshot_url` — server-side snapshot endpoint
+  (`/api/v2/tradingview_charts/snapshot?user_id=…`). On SC, screenshots are
   local-only, no server upload.
-- Object Tree right-click entry (last item in TV context menu —
-  `i18n…objectTree`). Not a feature loss in practice; just gone.
+- **7h.** Object Tree right-click entry (last item in TV context menu —
+  `i18n…objectTree`). Not a feature loss in practice; just absent on SC.
 
-### Replay session persistence across remount
-TV's chart re-entered the running replay session on remount because TV state
-was external. SC's engine doesn't auto-restore the session — Redux state
-survives but the chart doesn't resume. Tracked in `phase-5/deferred.md`.
-
-### Marks API
-`datafeed.getMarks` / `onGetMarks` (used by TV's `getMarks` API). Never had
-real consumers — `_onGetMarksCallback` was wired but only used to set
-`startDate` for the readyToDraw gate. Not relevant to port.
-
-### Custom resolutions and `OTHER_RESOLUTIONS` mapping
+### 8. Custom resolutions and `OTHER_RESOLUTIONS` mapping
 TV had explicit `["D", "1D", "2D", "W", "1W", "2W", "1M"]` plus
 `SECOND_RESOLUTIONS` (`1S…30S`) in supported_resolutions. SC datafeed
 exposes its own. Verify that all of the same intervals are picker-available
 in SC, especially seconds and 2D/2W.
 
-### Mobile preset
-Commented-out `preset: "mobile"` for tablet/mobile device types — was
-disabled in TV (too many features stripped). Not in SC; not a regression.
