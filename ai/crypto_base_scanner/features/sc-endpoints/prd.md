@@ -69,10 +69,10 @@ of which back the templates UIs:
 ### 1. Layout record
 
 ```
-GET    /superchart/layout                        → 200 {state, revision} | 404
-PATCH  /superchart/layout                        body: {state, expectedRevision}
+GET    /superchart/layout                        → 200 {state, revision}   (state=null, revision=0 when no row)
+PATCH  /superchart/layout                        body: {state, expectedRevision?}
                                                  → 200 {revision}
-                                                 → 409 {remoteState, remoteRevision} on mismatch
+                                                 → 409 {remoteState, remoteRevision} on mismatch (only when expectedRevision sent)
 DELETE /superchart/layout                        → 204
 ```
 
@@ -82,13 +82,17 @@ DELETE /superchart/layout                        → 204
   successful write.
 - 409 body shape is `{remoteState, remoteRevision}` so the frontend can run
   SC's merge-retry against the remote.
+- `expectedRevision` is optional. When sent, the server enforces optimistic
+  concurrency and returns 409 on mismatch. When omitted, the save is
+  last-write-wins — this is the path SC's `saveState` uses for
+  clearState / applying chart templates / `setActiveChartTemplate`.
 
 Replaces TV's `/api/v2/tradingview_charts/charts`.
 
 ### 2. Drawings record (per symbol)
 
 ```
-GET    /superchart/drawings/:coinray_symbol      → 200 {overlays, revision} | 404
+GET    /superchart/drawings/:coinray_symbol      → 200 {overlays, revision}   (overlays=null, revision=0 when no row)
 PATCH  /superchart/drawings/:coinray_symbol      body: {overlays, expectedRevision?}
                                                  → 200 {revision}
 DELETE /superchart/drawings/:coinray_symbol      → 204

@@ -145,13 +145,13 @@ module ApiV3
     params do
       use :auth
       requires :state,             type: String
-      requires :expected_revision, type: Integer
+      optional :expected_revision, type: Integer
     end
     patch "/superchart/layout" do
       layout = current_account.superchart_layout ||
                current_account.build_superchart_layout(revision: 0)
 
-      if params[:expected_revision] != layout.revision
+      if params[:expected_revision].present? && params[:expected_revision] != layout.revision
         error!({
           remoteState:    layout.state,
           remoteRevision: layout.revision,
