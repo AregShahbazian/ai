@@ -439,7 +439,7 @@ Current: `controllers/replay/replay-controller.js`
 
 ---
 
-### Phase 6: Persistence (StorageAdapter) — partially done
+### Phase 6: Persistence (StorageAdapter) ✅ Done
 
 > **Quiz-side delivered** as part of Phase 7 (originally deferred —
 > folded back in mid-implementation): `QuizStorageAdapter` at
@@ -449,12 +449,19 @@ Current: `controllers/replay/replay-controller.js`
 > `questionStudies`). The "Phase 6 must precede Phase 7" ordering was
 > dropped — quiz now owns its persistence end-to-end.
 >
-> **General chart-layout persistence still TODO.** No app-wide
-> StorageAdapter is wired for TT / `/charts` / grid-bot / preview yet.
-> Each instance saves nothing across reloads (or relies on Redux for
-> per-tab settings). Decisions to take when this lands: per-market vs.
-> per-tab key strategy, migration of existing TV-format saved data
-> (`/api/v2/tradingview_charts`), and which surfaces opt in.
+> **General chart-layout persistence shipped (`[sc-endpoints]`).**
+> `AltradyStorageAdapter` factory in
+> `super-chart/storage-adapter.js` returns either
+> `HttpAltradyStorageAdapter` (default, backed by
+> `/api/v3/superchart/*` endpoints) or `LocalAltradyStorageAdapter`
+> (dev/debug fallback, toggled via `localStorage["altrady-sc:storage"]
+> = "local"` or `chartController.toggleStorageBackend()`). Both extend
+> `ReduxController` and use a TV-faithful split: layout (indicators +
+> panes + styles) under one global per-user record, drawings per-symbol
+> (symbol read fresh on every call via `getSymbol` callback). Drawing
+> and indicator templates pass through. Wired via `useChartLifecycle`.
+> No chartId keying. No migration from the legacy
+> `/api/v2/tradingview_charts` data — clean start.
 
 Save and restore chart state (indicators, drawings, user preferences). ~~**Must come before Quiz (Phase 7)**~~ — that ordering is moot now (quiz shipped its own adapter).
 

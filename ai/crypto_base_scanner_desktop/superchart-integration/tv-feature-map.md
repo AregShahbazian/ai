@@ -149,9 +149,11 @@ toolbar when a drawing is selected.
 TV had server-side `SaveLoadAdapter` against `/api/v2/tradingview_charts`
 saving drawings + studies + chart templates + study templates + line tools
 groups (auto-save via `onAutoSaveNeeded`), plus `LocalSaveLoadAdapter` for
-non-trading users. SC only has `QuizStorageAdapter`. TT, /charts, grid-bot,
-preview don't persist drawings/indicators across reloads.
-*(Pending — INTEGRATION.md Phase 6.)*
+non-trading users.
+*(Done — `[sc-endpoints]`. `AltradyStorageAdapter` (HTTP default, local
+debug fallback) covers TT, /charts, grid-bot, preview. TV-faithful split:
+layout global per user, drawings per symbol. No migration from legacy
+`/api/v2/tradingview_charts` data. See INTEGRATION.md Phase 6.)*
 
 ### 5. Chart-style settings save-back from chart UI
 TV's `saveColors` extracted `paneProperties`, `scalesProperties`,

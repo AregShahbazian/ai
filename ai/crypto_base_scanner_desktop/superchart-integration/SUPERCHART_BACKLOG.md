@@ -11,71 +11,54 @@ tree unless noted.
 
 ---
 
-## 1. Generic chart-layout persistence (non-quiz)
-
-**Local-only part: done.** `super-chart/storage-adapter.js`
-(`AltradyStorageAdapter`) wraps SC's `LocalStorageAdapter` with a
-TV-faithful split: layout (indicators + panes + styles) under one
-global record, drawings per-symbol. Drawing/indicator/chart templates
-pass through. Wired via `useChartLifecycle`. Surfaces all four UI
-buckets natively in SC.
-
-**Pending — backend swap.** Replace the `LocalStorageAdapter` delegation
-with HTTP calls against the endpoints proposed in
-`phase-6/sc-endpoints.md` (`/superchart/states`,
-`/superchart/indicator_templates`, `/superchart/drawing_templates`).
-Blocked on the endpoints existing.
-
----
-
-## 2. Custom indicators — 24 PineJS studies, none ported
+## 1. Custom indicators — 24 PineJS studies, none ported
 
 Lives in `controllers/ci.js` (20 inline studies) + `controllers/ci/*.js`
 (4 separate files).
 
-- **2a.** `rsiStoch` — `controllers/ci/rsi-stoch.js`
-- **2b.** `previousCandleOutliers` — `controllers/ci/previous-candle-outliers.js`
+- **1a.** `rsiStoch` — `controllers/ci/rsi-stoch.js`
+- **1b.** `previousCandleOutliers` — `controllers/ci/previous-candle-outliers.js`
   (emits custom shapes via `updateCustomIndicators`)
-- **2c.** `smartMoney` — `controllers/ci/smart-money.js`
+- **1c.** `smartMoney` — `controllers/ci/smart-money.js`
   (feature-gated `essential_indicators`, emits custom shapes)
-- **2d.** `liquidations` — `controllers/ci/liquidations.js`
+- **1d.** `liquidations` — `controllers/ci/liquidations.js`
   (feature-gated `essential_indicators`, emits custom shapes + dashboard data)
-- **2e.** `Willams21EMA13`
-- **2f.** `Trend Trigger Factor [LazyBear]`
-- **2g.** `Relative Momentum Index`
-- **2h.** `CM_Enhanced_Ichimoku Cloud-V5`
-- **2i.** `True Strength Index [LazyBear]`
-- **2j.** `On Balance Volume EMA-13`
-- **2k.** `CM_Williams_Vix_Fix`
-- **2l.** `CM_EMA Trend Bars`
-- **2m.** `CM_Double EMA Trend Color`
-- **2n.** `Bitcoin Kill Zones v2 [oscarvs]`
-- **2o.** `Fisher Transform Indicator by Ehlers Strategy`
-- **2p.** `Squeeze Momentum Indicator [LazyBear]`
-- **2q.** `CM_SlingShotSystem`
-- **2r.** `CM_Pivot Bands V1`
-- **2s.** `Almost Zero Lag EMA [LazyBear]`
-- **2t.** `On Balance Volume Oscillator [LazyBear]`
-- **2u.** `SuperTrend BF`
-- **2v.** `Exponential Bollinger Bands`
-- **2w.** `WaveTrend [LazyBear]`
-- **2x.** `KDJ Indicator - iamaltcoin`
+- **1e.** `Willams21EMA13`
+- **1f.** `Trend Trigger Factor [LazyBear]`
+- **1g.** `Relative Momentum Index`
+- **1h.** `CM_Enhanced_Ichimoku Cloud-V5`
+- **1i.** `True Strength Index [LazyBear]`
+- **1j.** `On Balance Volume EMA-13`
+- **1k.** `CM_Williams_Vix_Fix`
+- **1l.** `CM_EMA Trend Bars`
+- **1m.** `CM_Double EMA Trend Color`
+- **1n.** `Bitcoin Kill Zones v2 [oscarvs]`
+- **1o.** `Fisher Transform Indicator by Ehlers Strategy`
+- **1p.** `Squeeze Momentum Indicator [LazyBear]`
+- **1q.** `CM_SlingShotSystem`
+- **1r.** `CM_Pivot Bands V1`
+- **1s.** `Almost Zero Lag EMA [LazyBear]`
+- **1t.** `On Balance Volume Oscillator [LazyBear]`
+- **1u.** `SuperTrend BF`
+- **1v.** `Exponential Bollinger Bands`
+- **1w.** `WaveTrend [LazyBear]`
+- **1x.** `KDJ Indicator - iamaltcoin`
 
 ---
 
-## 3. Custom-indicator support overlays (consumers of #2)
+## 2. Custom-indicator support overlays (consumers of #1)
 
-- **3a. Liquidations Dashboard** (`liquidations-dashboard.js`) — floating
+- **2a. Liquidations Dashboard** (`liquidations-dashboard.js`) — floating
   panel showing which leverage tiers (5x/10x/25x/50x/100x) are active.
-  Pulls from `customIndicators` ChartContext entry; tied to **2d**.
-- **3b. Custom-indicator shapes** (`custom-indicators.js`) — generic React
+  Pulls from `customIndicators` ChartContext entry; tied to **1d**.
+- **2b. Custom-indicator shapes** (`custom-indicators.js`) — generic React
   component that takes shape drawings emitted by custom indicators
   (`updateCustomIndicators` callback) and renders them on the chart.
-  Used by **2b**, **2c**, **2d**.
+  Used by **1b**, **1c**, **1d**.
 
 ---
 
-## 4. Trendline-to-alert conversion
+## 3. Trendline-to-alert conversion
 
 TV's `tradingview-enhancements.js` shows a bell icon when a
 `LineToolTrendLine` or `LineToolRay` is selected, converting the drawn
@@ -94,7 +77,7 @@ storage adapter, plus its own selection/right-click APIs.)
 
 ---
 
-## 5. Resume-from-background data reset
+## 4. Resume-from-background data reset
 
 `use-trading-view.js` listened on `visibilitychange` +
 `MobileMessageTypes.FOREGROUND_STATE` and called `datafeed.resetData()` to
