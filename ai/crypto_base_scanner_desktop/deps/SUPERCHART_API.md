@@ -1,9 +1,23 @@
 # Superchart API Reference
 
 > Source: `$SUPERCHART_DIR` (branch: main)
-> Superchart git hash: `69a41cfaddf9e3dcb0a68d0d12ef29791b913374`
+> Superchart git hash: `026894d2ee346a26df09e7b55d2bea4e5b24050a`
 > coinray-chart (`packages/coinray-chart`, branch: main) git hash: `a9a761a37adada42a9c745e780b42b6b21513af6`
 > Do NOT explore source — use this doc instead.
+
+## Package name & version
+
+- Package was renamed `superchart` → `@coinrayio/superchart` in SC `474f052`.
+- Current published version: `0.1.0` (was `0.0.1`).
+- Distribution: GitHub Packages (`https://npm.pkg.github.com/`), scoped + restricted.
+  See `$SUPERCHART_DIR/docs/versioning-and-release.md` for the publish flow.
+- **App-side note:** `crypto_base_scanner_desktop/package.json` still pins
+  `"superchart": "link:../Superchart"`. The local symlink keeps working
+  regardless of the upstream package name. Imports in this app continue to
+  use `from "superchart"` until the dep entry is renamed.
+- Examples in this doc keep the `from "superchart"` form for that reason —
+  when reading the SC source / docs (`@coinrayio/superchart`), substitute
+  mentally.
 
 ## Multi-instance support
 
@@ -61,11 +75,52 @@ SYSTEM_DRAWING_TEMPLATES — Read-only bundled drawing template presets (4 entri
 // Feature flags (new in 8c245a1)
 FEATURE_DEFAULTS        — Record<FeatureFlag, boolean> — all flags with their defaults
 useFeature              — React hook: useFeature(flag: FeatureFlag): boolean
+
+// Fibonacci-level constants (new in 0bb516b — values, not types)
+FIBONACCI_RETRACEMENT_LEVELS
+FIBONACCI_EXTENSION_LEVELS
+FIBONACCI_CIRCLE_LEVELS
+FIBONACCI_FAN_LEVELS
+
+// Library version (new in 17dc259)
+version                 — () => string, returns bundled SC version (e.g. "0.1.0")
+VERSION                 — string constant, same value as version()
 ```
+
+`Superchart.version()` is also exposed as a TradingView-style static
+method on the class — handy from the browser console
+(`window.Superchart.version()` if you've parked the constructor on
+`window`, or import it). All three (static method, function, constant)
+are interchangeable; the value is replaced at build time from
+`package.json` via Vite `define` (`__SUPERCHART_VERSION__`).
+
+> **Welcome banner side-effect.** Constructing the first `Superchart`
+> instance on a page logs a one-time dashed-border banner to the
+> console with the bundled version. Subsequent instances are silent.
+> Survives HMR (the flag lives on the module scope). Not gated by
+> `NODE_ENV` — appears in prod too. Cannot be disabled; if it ever
+> becomes a problem, the upstream change is in `src/lib/version.ts`
+> (`bannerPrinted` flag).
+
+> **klinecharts is bundled (since `0bb516b`).** It moved from `dependencies` to
+> `devDependencies` in SC and is excluded from `rollupOptions.external` in
+> `vite.config.ts`, so it ships inside `dist/superchart.{es,cjs}.js`. Consumers
+> **must not** install klinecharts and **must not** `import … from 'klinecharts'`
+> — everything (types, `registerOverlay` / `registerFigure` / `registerIndicator`,
+> constants) is re-exported from `superchart`. Importing from klinecharts directly
+> would target a different engine instance than the one SC's overlays were
+> registered against.
 
 Also re-exports klinecharts core types: `Chart`, `Nullable`, `DeepPartial`, `KLineData`,
 `Point`, `Styles`, `Overlay`, `OverlayCreate`, `OverlayEvent`, `OverlayTemplate`, `Indicator`,
 `IndicatorCreate`, `IndicatorTemplate`, `FigureTemplate`, `ReplayEngine`, `ReplayStatus`.
+
+Additional klinecharts re-exports (new in `0bb516b`):
+`OverlayMode`, `OverlayDrawingMode`, `OverlayTextChangeEvent`, `OverlayTextChangeCallback`,
+`OverlayPropertiesStore`, `FigureLevel`, `IndicatorSeries`, `ActionType`,
+`LineType`, `PolygonType`, `CandleType`, `TooltipShowRule`, `TooltipShowType`,
+`FeatureType`, `TooltipFeaturePosition`, `CandleTooltipRectPosition`,
+`FormatDateType`, `BarSpaceLimit`, `ZoomAnchor`, `DomPosition`.
 
 Also re-exports Superchart-specific types: `SuperchartOptions`, `SuperchartApi`, `VisibleTimeRange`,
 `PriceTimeResult`, `ToolbarButtonOptions`, `ToolbarDropdownOptions`, `ToolbarDropdownItem`,

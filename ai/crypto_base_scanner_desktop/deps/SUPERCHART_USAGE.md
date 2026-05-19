@@ -1,9 +1,46 @@
 # Superchart Usage Patterns
 
 > Source: `$SUPERCHART_DIR` (example app + source, branch: main)
-> Superchart git hash: `69a41cfaddf9e3dcb0a68d0d12ef29791b913374`
+> Superchart git hash: `026894d2ee346a26df09e7b55d2bea4e5b24050a`
 > coinray-chart (`packages/coinray-chart`, branch: main) git hash: `a9a761a37adada42a9c745e780b42b6b21513af6`
 > Do NOT explore source — use this doc instead.
+
+## Package rename (SC `474f052`)
+
+Upstream package was renamed `superchart` → `@coinrayio/superchart` and
+bumped to `0.1.0`. The app's `package.json` still pins
+`"superchart": "link:../Superchart"`, so the symlink keeps imports
+working under the old name. **Keep using `from "superchart"` in this
+repo** until the dep entry is renamed; do not switch import strings
+ad-hoc or they'll break the linked-package resolution.
+
+## Library version & welcome banner (SC `17dc259`)
+
+- `Superchart.version()` — TV-style static method, returns `"0.1.0"`.
+- `import { version, VERSION } from "superchart"` — function or constant
+  form, same value.
+- First chart instance per page logs a dashed-border welcome banner to
+  the console with the bundled version. Subsequent instances on the
+  same page are silent. Survives HMR. Not `NODE_ENV`-gated, so it shows
+  in production too. Cannot be suppressed from the host side.
+
+## Dependencies
+
+`superchart` exposes its own public API — do NOT install or import from
+`klinecharts` directly. As of SC `0bb516b`, klinecharts is bundled into
+`dist/superchart.{es,cjs}.js` (moved to devDependencies; removed from
+`rollupOptions.external`). All types, registration functions
+(`registerOverlay` / `registerFigure` / `registerIndicator`), and constants
+needed for custom overlays/indicators are re-exported from `superchart`.
+Importing from klinecharts would resolve to a different engine instance
+than the one SC registered overlays/figures against, causing silent
+failures.
+
+Also fixed in `0bb516b` (no API surface change):
+- `applyChartTemplate` no longer cross-contaminates layout when multiple
+  `useChartState` instances are active, and no longer marks itself dirty
+  mid-apply.
+- `sc.dispose()` no longer triggers an autosave storm during teardown.
 
 ## Multi-instance
 

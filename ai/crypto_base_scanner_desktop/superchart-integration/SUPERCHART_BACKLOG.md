@@ -13,11 +13,18 @@ tree unless noted.
 
 ## 1. Generic chart-layout persistence (non-quiz)
 
-TV had server-side `SaveLoadAdapter` against `/api/v2/tradingview_charts`
-saving drawings + studies + chart templates + study templates + line tools
-groups (auto-save via `onAutoSaveNeeded`), plus `LocalSaveLoadAdapter` for
-non-trading users. SC only has `QuizStorageAdapter`. TT, /charts, grid-bot,
-preview don't persist drawings/indicators across reloads.
+**Local-only part: done.** `super-chart/storage-adapter.js`
+(`AltradyStorageAdapter`) wraps SC's `LocalStorageAdapter` with a
+TV-faithful split: layout (indicators + panes + styles) under one
+global record, drawings per-symbol. Drawing/indicator/chart templates
+pass through. Wired via `useChartLifecycle`. Surfaces all four UI
+buckets natively in SC.
+
+**Pending — backend swap.** Replace the `LocalStorageAdapter` delegation
+with HTTP calls against the endpoints proposed in
+`phase-6/sc-endpoints.md` (`/superchart/states`,
+`/superchart/indicator_templates`, `/superchart/drawing_templates`).
+Blocked on the endpoints existing.
 
 ---
 
@@ -68,25 +75,22 @@ Lives in `controllers/ci.js` (20 inline studies) + `controllers/ci/*.js`
 
 ---
 
-## 4. TradingView Enhancements (`tradingview-enhancements.js` + folder)
+## 4. Trendline-to-alert conversion
 
-TV iframe-DOM-injection layer that added buttons to TV's floating drawing
-toolbar when a drawing is selected.
+TV's `tradingview-enhancements.js` shows a bell icon when a
+`LineToolTrendLine` or `LineToolRay` is selected, converting the drawn
+line into a trend-line alert (feature-gated `trend_line_alerts`). Uses
+replay's `currentTime` to compute direction.
 
-- **4a. Drawing template save/load/apply** — Save Drawing Template As /
-  Apply Default Drawing Template / list+apply+delete saved templates per
-  tool name. Uses `loadTemplates`/`deleteTemplate` from
-  `actions/chart-settings`. Modal:
-  `tradingview-enhancements/drawing_template_modal.js`.
-- **4b. Trendline-to-alert conversion** — bell icon on `LineToolTrendLine`
-  / `LineToolRay` selection that converts the drawn line into a trend-line
-  alert (uses `trend_line_alerts` feature gate). Hooks up replay's
-  `currentTime` to compute direction.
-- **4c. Selection / delete plumbing** — `getSelectedEntities`,
-  `onSelectionChanged`, `clickDelete`, `createToolbarPlaceholder`,
-  `createToolbarButton`.
-- **4d. `useToolbarVisibility`** — MutationObserver-based detection of TV's
-  drawing toolbar visibility.
+SC equivalent needs: an "overlay selected" event/callback to render the
+bell button, the selected overlay's points + properties to build the
+alert payload, then `removeOverlay` on commit. Wire to the existing
+`newAlert` action.
+
+(The rest of TV's `tradingview-enhancements.js` — drawing-template
+save/load/apply, selection/delete plumbing, toolbar-visibility observer
+— is **obsolete**: SC provides drawing templates natively via the
+storage adapter, plus its own selection/right-click APIs.)
 
 ---
 
@@ -103,13 +107,4 @@ porting 1:1, verify:
    resume (in which case SC just needs to trigger a chart-side refetch).
 2. Whether SC's datafeed exposes a "reset" hook equivalent to TV's
    `onResetCacheNeededCallback`.
-
----
-
-## 6. Server-side snapshot upload
-
-TV's `snapshot_url` option pointed at
-`/api/v2/tradingview_charts/snapshot?user_id=…`, giving users a shareable
-hosted screenshot URL. On SC, screenshots are local-only — no server
-upload. Port the upload step into SC's screenshot flow.
 
