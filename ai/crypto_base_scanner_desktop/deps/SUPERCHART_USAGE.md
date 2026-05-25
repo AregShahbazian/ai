@@ -1,7 +1,7 @@
 # Superchart Usage Patterns
 
 > Source: `$SUPERCHART_DIR` (example app + source, branch: main)
-> Superchart git hash: `026894d2ee346a26df09e7b55d2bea4e5b24050a`
+> Superchart git hash: `86af0bb402224d2589dfa3d2b9c3527244d96799`
 > coinray-chart (`packages/coinray-chart`, branch: main) git hash: `a9a761a37adada42a9c745e780b42b6b21513af6`
 > Do NOT explore source — use this doc instead.
 
@@ -14,7 +14,30 @@ working under the old name. **Keep using `from "superchart"` in this
 repo** until the dep entry is renamed; do not switch import strings
 ad-hoc or they'll break the linked-package resolution.
 
-## Library version & welcome banner (SC `17dc259`)
+## Two editions: community vs enterprise (SC `24e6fb8`)
+
+SC now ships two npm packages from one source tree:
+`@coinrayio/superchart` (community, `dist-community/`) and
+`@coinrayio/superchart-enterprise` (enterprise, `dist-enterprise/`).
+The root `package.json` `main`/`module`/`types`/`exports` point at
+`dist-enterprise/`, so consuming the repo by symlink/git URL always
+yields the enterprise edition. The Altrady symlink resolves to
+enterprise — the `brand` option is available and respected at runtime.
+
+Edition can be read at runtime:
+
+```javascript
+import { Superchart, edition, EDITION } from "superchart"
+Superchart.edition() // "enterprise" in this repo
+edition()             // "enterprise"
+EDITION               // "enterprise"
+```
+
+In community, `brand` is `Omit`-stripped from `SuperchartOptions`'s
+type and ignored at runtime (the Altrady badge is locked in). In
+enterprise it's a real option — see "Branding / Watermark" below.
+
+## Library version & welcome banner (SC `17dc259`, updated in `24e6fb8`)
 
 - `Superchart.version()` — TV-style static method, returns `"0.1.0"`.
 - `import { version, VERSION } from "superchart"` — function or constant
@@ -23,6 +46,37 @@ ad-hoc or they'll break the linked-package resolution.
   the console with the bundled version. Subsequent instances on the
   same page are silent. Survives HMR. Not `NODE_ENV`-gated, so it shows
   in production too. Cannot be suppressed from the host side.
+- In the enterprise build (what the app uses), the banner appends
+  " Enterprise" to the message ("Welcome to Superchart Enterprise v…").
+
+## Branding / Watermark (SC `24e6fb8`)
+
+Every `Superchart` instance auto-renders a watermark badge in the
+chart's bottom-left corner. There is no off-by-default mode. To control
+it (enterprise only):
+
+```javascript
+// Hide entirely
+new Superchart({ ..., brand: false })
+
+// Override with custom mark
+new Superchart({
+  ...,
+  brand: {
+    logo: "<svg>...</svg>" || <MyLogo />,  // SVG string, URL/data-URI, or ReactNode
+    name: "My App",                        // text next to logo
+    url:  "https://my.app/chart",          // makes badge clickable; omit for visual-only
+  },
+})
+
+// Omit `brand` → default Altrady badge (logo + "Superchart" + altrady.com/superchart)
+```
+
+Visual styling is overridable via CSS custom properties on the host
+container (`--superchart-brand-color`, `--superchart-brand-background`,
+etc.) — no need to touch the component. If the app ever wants to fully
+suppress the watermark, set `brand: false` on the constructor (works
+today via the enterprise symlink).
 
 ## Dependencies
 
@@ -278,6 +332,18 @@ async save(key, state, expectedRevision) {
 ```
 
 SC catches `StorageConflictError` internally, merges states, and retries up to 3 times. After 3 failures it calls `onStorageError` and re-throws.
+
+> **Symbol/period autosave race fixed in SC `6e9266b`.** Pre-`6e9266b`,
+> `useChartState` was instantiated at ~8 sites inside SC (period bar,
+> popups, templates, etc.). Each call attached its own
+> symbol/period autosave subscriber, so a single symbol or period
+> change would fan out to 8 concurrent `enqueueMutation` calls on the
+> same storage key, blow past `SAVE_RETRY_LIMIT`, and surface a
+> spurious `StorageConflictError` through `onStorageError`. SC now
+> gates that subscriber behind a `mirrorSymbolPeriod` flag and only
+> the top-level `SuperchartComponent` sets it. No host change needed
+> — if you added a workaround to silence `StorageConflictError` in
+> `onStorageError` on symbol/period switches, it can be removed.
 
 ### Wiring to Superchart
 

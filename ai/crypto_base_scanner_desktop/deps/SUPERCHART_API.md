@@ -1,7 +1,7 @@
 # Superchart API Reference
 
 > Source: `$SUPERCHART_DIR` (branch: main)
-> Superchart git hash: `026894d2ee346a26df09e7b55d2bea4e5b24050a`
+> Superchart git hash: `86af0bb402224d2589dfa3d2b9c3527244d96799`
 > coinray-chart (`packages/coinray-chart`, branch: main) git hash: `a9a761a37adada42a9c745e780b42b6b21513af6`
 > Do NOT explore source — use this doc instead.
 
@@ -11,10 +11,31 @@
 - Current published version: `0.1.0` (was `0.0.1`).
 - Distribution: GitHub Packages (`https://npm.pkg.github.com/`), scoped + restricted.
   See `$SUPERCHART_DIR/docs/versioning-and-release.md` for the publish flow.
+- **Two editions (new in `24e6fb8`).** SC now ships as two separate packages
+  built from a single source tree:
+  - `@coinrayio/superchart` (community) — built into `dist-community/`,
+    watermark locked to the bundled Altrady badge; the `brand` constructor
+    option is stripped from the type and ignored at runtime.
+  - `@coinrayio/superchart-enterprise` (enterprise) — built into
+    `dist-enterprise/`, exposes the `brand` option and respects it at
+    runtime.
+
+  The runtime bundles share the same implementation; the split is a
+  combination of build-time `__SUPERCHART_EDITION__` define (Vite) and
+  edition-specific TypeScript entry files (`src/lib/community.ts`,
+  `src/lib/enterprise.ts`). The root `package.json` `main`/`module`/`types`/
+  `exports` point at `dist-enterprise/` — so consuming the repo directly
+  (link or git URL) always gets the enterprise edition.
 - **App-side note:** `crypto_base_scanner_desktop/package.json` still pins
-  `"superchart": "link:../Superchart"`. The local symlink keeps working
-  regardless of the upstream package name. Imports in this app continue to
-  use `from "superchart"` until the dep entry is renamed.
+  `"superchart": "link:../Superchart"`. The local symlink resolves to
+  `dist-enterprise/` via the root `package.json` entry fields, so the app
+  gets the enterprise edition (with `brand` available). Imports continue to
+  use `from "superchart"`.
+- **`SuperchartOptions` is NOT exported from `src/lib/index.ts`** — each
+  edition entry exports its own variant:
+  - community: `type SuperchartOptions = Omit<FullOptions, 'brand'>`
+  - enterprise: re-exports the full `SuperchartOptions` (with `brand`)
+  Via the local symlink the app always pulls the enterprise variant.
 - Examples in this doc keep the `from "superchart"` form for that reason —
   when reading the SC source / docs (`@coinrayio/superchart`), substitute
   mentally.
@@ -39,6 +60,45 @@ the host:
   human-friendly labels (`BTC/USDT` instead of `BINA_USDT_BTC`).
 
 Reference story: `$SUPERCHART_DIR/.storybook/api-stories/MultiChart.stories.tsx`.
+
+## Branding / Watermark (new in `24e6fb8`)
+
+A bottom-left watermark badge is auto-rendered by every `Superchart`
+instance (`position: absolute; bottom: 12px; left: 12px;`). It always
+renders — there is no off-by-default mode.
+
+```typescript
+// Hide watermark entirely (enterprise only)
+new Superchart({ ..., brand: false })
+
+// Override with a custom mark (enterprise only)
+new Superchart({
+  ...,
+  brand: {
+    logo?: string | ReactNode   // raw SVG string, URL/data-URI, or ReactNode
+    name?: string               // text rendered next to the logo
+    url?: string                // when present, badge is a clickable <a>
+  }
+})
+
+// Omit `brand` entirely → default Altrady badge
+//   logo: inlined `altrady-symbol.svg`
+//   name: "Superchart"
+//   url:  "https://altrady.com/superchart"
+```
+
+**Community vs enterprise runtime.** The `Watermark` component checks
+`__SUPERCHART_EDITION__ === 'enterprise'` (build-time replacement, then
+dead-code-eliminated). In the community build, any `brand` value passed
+at runtime — even from JS bypassing the type — is ignored; the bundled
+Altrady badge always shows. In the enterprise build, `brand` is
+respected. The app gets enterprise via the symlink, so `brand: false`
+works today.
+
+**CSS overrides.** Visual styling lives in `src/lib/branding/Watermark.less`
+and exposes CSS custom properties (e.g. `--superchart-brand-color`,
+`--superchart-brand-background`). Theme/host CSS can override these
+without touching the component.
 
 ## Exports (`import { ... } from "superchart"`)
 
@@ -85,6 +145,14 @@ FIBONACCI_FAN_LEVELS
 // Library version (new in 17dc259)
 version                 — () => string, returns bundled SC version (e.g. "0.1.0")
 VERSION                 — string constant, same value as version()
+
+// Edition (new in 24e6fb8)
+edition                 — () => 'community' | 'enterprise'
+EDITION                 — string constant, same value as edition()
+
+// Branding types (new in 24e6fb8) — enterprise edition only
+BrandConfig             — { logo?: string | ReactNode; name?: string; url?: string }
+BrandOption             — BrandConfig | false   // false hides watermark entirely
 ```
 
 `Superchart.version()` is also exposed as a TradingView-style static
@@ -93,6 +161,12 @@ method on the class — handy from the browser console
 `window`, or import it). All three (static method, function, constant)
 are interchangeable; the value is replaced at build time from
 `package.json` via Vite `define` (`__SUPERCHART_VERSION__`).
+
+`Superchart.edition()` mirrors this pattern (static method + `edition()`
+function + `EDITION` constant). Value is replaced at build time via
+Vite `define` (`__SUPERCHART_EDITION__`). For the symlinked app, this
+returns `"enterprise"`. The welcome banner also appends " Enterprise"
+to its console message when running the enterprise build.
 
 > **Welcome banner side-effect.** Constructing the first `Superchart`
 > instance on a page logs a one-time dashed-border banner to the
@@ -137,7 +211,8 @@ Also re-exports Superchart-specific types: `SuperchartOptions`, `SuperchartApi`,
 `FeatureFlag`,
 `LocalStorageAdapterOptions`, `HttpStorageAdapterOptions`,
 `ToolbarButtonOptions`, `ToolbarDropdownOptions`, `ToolbarDropdownItem`,
-`ToolbarDropdownActionItem`, `ToolbarDropdownSeparator`.
+`ToolbarDropdownActionItem`, `ToolbarDropdownSeparator`,
+`BrandConfig`, `BrandOption`.
 
 ## SuperchartOptions (constructor)
 
@@ -163,6 +238,7 @@ Also re-exports Superchart-specific types: `SuperchartOptions`, `SuperchartApi`,
   theme?: 'light' | 'dark' | string     // default: 'light'
   timezone?: string                     // default: 'Etc/UTC'
   watermark?: string | Node
+  brand?: BrandOption                   // enterprise edition only — controls bottom-left Altrady-style badge; `false` hides it, `{logo,name,url}` overrides. See "Branding / Watermark" section.
   styleOverrides?: DeepPartial<Styles>
   scriptProvider?: ScriptProvider
   drawingBarVisible?: boolean           // default: false
