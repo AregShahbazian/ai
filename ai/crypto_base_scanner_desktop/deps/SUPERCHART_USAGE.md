@@ -1,7 +1,7 @@
 # Superchart Usage Patterns
 
 > Source: `$SUPERCHART_DIR` (example app + source, branch: main)
-> Superchart git hash: `86af0bb402224d2589dfa3d2b9c3527244d96799`
+> Superchart git hash: `00b4c495e246af12dfcb51f7044390b84edb1bc0`
 > coinray-chart (`packages/coinray-chart`, branch: main) git hash: `a9a761a37adada42a9c745e780b42b6b21513af6`
 > Do NOT explore source — use this doc instead.
 
@@ -699,6 +699,84 @@ return () => {
 indicatorProvider, dispose scriptProvider, unmount internal React root, call
 klinecharts `dispose()`, remove CSS classes, reset store. `destroy()` is an alias.
 
+
+
+## BREAKING: DatafeedConfiguration Fields Renamed to snake_case (ce4c809)
+
+`DatafeedConfiguration` aligns all fields to snake_case to match the TradingView Datafeed contract:
+
+| Old (camelCase) | New (snake_case) |
+|---|---|
+| `supportedResolutions` | `supported_resolutions` |
+| `symbolsTypes` | `symbols_types` |
+
+**Action required:** Update every `Datafeed.onReady` callback that constructs `DatafeedConfiguration`:
+
+```javascript
+// Before (broken after ce4c809)
+setTimeout(() => callback({ supportedResolutions: SUPPORTED_RESOLUTIONS, symbolsTypes: [{name: "Crypto", value: "crypto"}] }), 0)
+
+// After
+setTimeout(() => callback({ supported_resolutions: SUPPORTED_RESOLUTIONS, symbols_types: [{name: "Crypto", value: "crypto"}] }), 0)
+```
+
+In Altrady, update `coinray-datafeed.js` lines 36-38 — both field names appear there.
+The other fields (`exchanges`, `supports_marks`, `supports_timescale_marks`) were already snake_case and are unchanged.
+
+## User-Drawn Overlay Context Menu (2954fe0 / 8ea9d2c / 548ca06 / 6d68fbb)
+
+SC exposes three new `SuperchartApi` methods and one new constructor option for building
+a host-rendered right-click context menu on user-drawn overlays.
+
+### Constructor option
+
+```javascript
+new Superchart({
+  onUserOverlayRightClick: (event) => {
+    // event is OverlayEvent<unknown>
+    // event.overlay.id  — the right-clicked overlay id
+    // event.overlay.name — overlay type (e.g. "segment")
+    // event.pageX / event.pageY — page coords for anchoring the popover
+    openOverlayContextMenu(event)
+  },
+})
+```
+
+When `onUserOverlayRightClick` is supplied, SC suppresses its built-in right-click popup
+and calls this callback instead. Per-overlay `onRightClick` handlers (wired at `createOverlay`
+time) take precedence over this global callback.
+
+### Instance methods
+
+```javascript
+// Open SC's native overlay settings dialog (same as built-in "Settings" menu entry)
+sc.openOverlaySettings(overlayId)
+
+// Snapshot the overlay's current styling as a DrawingTemplate
+const extracted = sc.getDrawingTemplate(overlayId)
+// extracted: { toolName: "segment", template: { name: "", toolName: "segment", properties: {...} } }
+// Fill template.name before persisting:
+if (extracted) {
+  const name = "My Trend Style"
+  await storageAdapter.saveDrawingTemplate(extracted.toolName, name, { ...extracted.template, name })
+}
+
+// Apply a stored DrawingTemplate to an existing overlay
+const tpl = await storageAdapter.loadDrawingTemplate("segment", "My Trend Style")
+if (tpl) sc.applyDrawingTemplate(overlayId, tpl)
+
+// Lock / unlock an overlay (routes through modifyOverlay pipeline; autosave fires)
+sc.setOverlayLocked(overlayId, true)
+sc.setOverlayLocked(overlayId, false)
+```
+
+**Altrady controller note:** Wire `onUserOverlayRightClick` in the `Superchart` constructor.
+The callback should call a controller method to show the Altrady context menu — do NOT embed
+rendering logic in the callback (controller owns all visual decisions). `openOverlaySettings`,
+`getDrawingTemplate`, `applyDrawingTemplate`, and `setOverlayLocked` are called from context
+menu action handlers in the controller.
+
+
 ## Non-Obvious Gotchas
 
 1. **Two React roots**: Superchart creates its own React root internally. It does
@@ -780,7 +858,7 @@ klinecharts `dispose()`, remove CSS classes, reset store. `destroy()` is an alia
     click location without manual offset math.
 
 18. **`SuperchartDataLoader.getConfiguration()` for symbol-search UIs**: The
-    `DatafeedConfiguration` (exchanges, symbolsTypes) captured by `Datafeed.onReady`
+    `DatafeedConfiguration` (exchanges, symbols_types) captured by `Datafeed.onReady`
     is now exposed via `dataLoader.getConfiguration()`. SC uses it internally to
     populate the exchange filter tabs in the built-in symbol-search modal. If
     application code needs those filter lists (e.g. a custom picker), read them
@@ -817,3 +895,7 @@ klinecharts `dispose()`, remove CSS classes, reset store. `destroy()` is an alia
     subsequent symbol/period/overlay/indicator changes re-save the template — not just
     the chart state. If the host UI tracks "dirty template" state, treat any chart edit
     while `activeChartTemplate` is set as a template-write event.
+
+24. **`DatafeedConfiguration` fields are now snake_case** (ce4c809): `supportedResolutions` is now `supported_resolutions`; `symbolsTypes` is now `symbols_types`. Any `Datafeed.onReady` callback that passes the old camelCase keys will silently send `undefined` to SC (the symbol-search modal will have no exchange tabs or type filters). Update to the new names. See "BREAKING: DatafeedConfiguration Fields Renamed" section above.
+
+25. **`onUserOverlayRightClick` suppresses the built-in popup** (2954fe0): Providing this constructor option fully disables SC's native right-click context menu for user-drawn overlays. The consumer becomes responsible for all context-menu entries. Call `sc.openOverlaySettings(id)` to re-expose the Settings dialog, `sc.setOverlayLocked(id, true/false)` for lock/unlock, and `sc.getDrawingTemplate(id)` / `sc.applyDrawingTemplate(id, tpl)` for template operations. Per-overlay `onRightClick` handlers (from `createOverlay`) still win over this global option.

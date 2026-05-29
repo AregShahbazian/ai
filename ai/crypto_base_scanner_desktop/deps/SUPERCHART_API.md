@@ -1,7 +1,7 @@
 # Superchart API Reference
 
 > Source: `$SUPERCHART_DIR` (branch: main)
-> Superchart git hash: `86af0bb402224d2589dfa3d2b9c3527244d96799`
+> Superchart git hash: `00b4c495e246af12dfcb51f7044390b84edb1bc0`
 > coinray-chart (`packages/coinray-chart`, branch: main) git hash: `a9a761a37adada42a9c745e780b42b6b21513af6`
 > Do NOT explore source — use this doc instead.
 
@@ -153,6 +153,9 @@ EDITION                 — string constant, same value as edition()
 // Branding types (new in 24e6fb8) — enterprise edition only
 BrandConfig             — { logo?: string | ReactNode; name?: string; url?: string }
 BrandOption             — BrandConfig | false   // false hides watermark entirely
+
+// Overlay context-menu helpers (new in 8ea9d2c / 6d68fbb)
+ExtractedDrawingTemplate — { toolName: string; template: DrawingTemplate } — returned by sc.getDrawingTemplate(id)
 ```
 
 `Superchart.version()` is also exposed as a TradingView-style static
@@ -213,6 +216,7 @@ Also re-exports Superchart-specific types: `SuperchartOptions`, `SuperchartApi`,
 `ToolbarButtonOptions`, `ToolbarDropdownOptions`, `ToolbarDropdownItem`,
 `ToolbarDropdownActionItem`, `ToolbarDropdownSeparator`,
 `BrandConfig`, `BrandOption`.
+`ExtractedDrawingTemplate`.
 
 ## SuperchartOptions (constructor)
 
@@ -255,6 +259,7 @@ Also re-exports Superchart-specific types: `SuperchartOptions`, `SuperchartApi`,
   onSelect?: (result: PriceTimeResult) => void          // fires on chart click (see gotchas — 250ms deferred)
   onRightSelect?: (result: PriceTimeResult) => void     // fires on chart right-click
   onDoubleSelect?: (result: PriceTimeResult) => void    // fires on chart double-click
+  onUserOverlayRightClick?: (event: OverlayEvent<unknown>) => void  // fires on user-drawn overlay right-click; suppresses SC built-in popup (new in 2954fe0\/6d68fbb)
   onApiReady?: () => void                                // fires when React API mounts — getChart() non-null. Safe for subscriptions / toolbar buttons. Data not yet loaded.
   onDataLoaded?: () => void                              // fires when first dataset resolves — safe to read getDataList() / place overlays at concrete timestamps
 }
@@ -304,6 +309,10 @@ onDataLoaded(callback: () => void): () => void     // fires when first dataset r
 // Indicator/overlay removal — routed through the persistence pipeline (canvas + storage + modal kept in sync)
 removeIndicator(name: string): void                // by indicator type-name (e.g. "RSI", "MACD"); no-op if not active
 removeOverlay(id: string): void                    // by overlay id from createOverlay; transient (save:false) overlays removed from canvas only
+openOverlaySettings(id: string): void             // open SC native overlay style dialog (new in 8ea9d2c)
+getDrawingTemplate(id: string): ExtractedDrawingTemplate | null  // snapshot overlay styling; template.name is empty (new in 8ea9d2c)
+applyDrawingTemplate(id: string, template: DrawingTemplate): void  // apply DrawingTemplate to overlay (new in 8ea9d2c)
+setOverlayLocked(id: string, locked: boolean): void  // lock/unlock overlay via modifyOverlay pipeline (new in 548ca06)
 setVisibleRange(range: VisibleTimeRange): Promise<void>
 // Async. Waits for chart ready. VisibleTimeRange uses unix SECONDS.
 // Fetches missing history via dataLoader.getRange if range.from is before loaded data.
@@ -447,7 +456,8 @@ Predefined PERIODS constant:
 
 ### DatafeedConfiguration
 ```typescript
-{ supportedResolutions: string[], exchanges?: {value: string, name: string}[], symbolsTypes?: {name: string, value: string}[] }
+{ supported_resolutions: string[], exchanges?: {value: string, name: string}[], symbols_types?: {name: string, value: string}[] }
+// BREAKING (ce4c809): `supportedResolutions` → `supported_resolutions`, `symbolsTypes` → `symbols_types`
 ```
 
 ### VisibleTimeRange
@@ -704,6 +714,15 @@ interface DrawingTemplate extends DrawingTemplateMeta {
 Composite key is `(toolName, name)` — independent per tool.
 `SYSTEM_DRAWING_TEMPLATES`: 4 presets (Bullish trendline, Bearish trendline, Support line, Resistance line).
 UI shown when: `drawing_templates` feature flag is `true` AND adapter implements all 4 drawing-template methods.
+
+### ExtractedDrawingTemplate (new in 8ea9d2c / 6d68fbb)
+```typescript
+interface ExtractedDrawingTemplate {
+  toolName: string           // overlay.name, e.g. "segment", "fibonacciLine"
+  template: DrawingTemplate  // template.name is empty; consumer fills it before calling saveDrawingTemplate
+}
+```
+Returned by `sc.getDrawingTemplate(id)`. Use `toolName` as the first argument to `StorageAdapter.saveDrawingTemplate(toolName, name, template)`.
 
 ### ChartTemplateMeta / ChartTemplate (new in 69a41cf)
 ```typescript
