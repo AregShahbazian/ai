@@ -1,2 +1,3 @@
 - [Execute directly after clarifying questions are answered](feedback_execute_after_answers.md) — don't re-confirm what he just answered point-by-point
 - [orion is the real mapping app](project_orion_mapping_app.md) — ~/git/track was the POC; orion currently empty
+- [orion: decentralization deprioritized](project_orion_decentralization_deprioritized.md) — P2P is post-MVP; local-first + central sync

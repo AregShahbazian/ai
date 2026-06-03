@@ -27,13 +27,25 @@ subsequent response until the user explicitly ends it (e.g. "end discussion",
    (Terminal markdown doesn't render reliable ANSI color, so the bold blockquote
    is the visual marker. Always keep it as the first line.)
 
-4. **Suggest follow-ups.** After the answer, add 2–4 short follow-up questions,
-   clearly separated from the answer with a `---` divider and a **Follow-ups:**
-   label. These don't count toward the word limit.
+4. **Suggest follow-ups — only when genuinely useful.** Do NOT append questions
+   to every response. When they'd actually help move the discussion forward, add
+   a few, separated by a `---` divider under a **Follow-ups:** label, and
+   **numbered (1, 2, 3, …)** so the user can refer to them. Otherwise omit the
+   section entirely. These don't count toward the word limit.
 
 5. **Strict until ended.** Apply these rules to EVERY response, not just the
    first. When the user ends discussion mode, confirm in one line that it's off
    and resume normal behavior (drop the header, word cap, and follow-ups).
+
+6. **Auto-save a summary on exit.** When the user ends the discussion, ALWAYS
+   write a summary to memory before confirming exit:
+   - Create `discussion-<topic-slug>.md` in the auto-memory dir
+     (`~/.claude/projects/-home-areg/memory/`) with frontmatter
+     (`type: reference`), a one-paragraph summary of what was discussed, key
+     conclusions, and any open questions. Link related memories with `[[name]]`.
+   - Add a one-line pointer to `MEMORY.md`.
+   - If the discussion was trivial (no substantive content), say so and skip the
+     file instead of writing an empty summary.
 
 ## Response shape
 
@@ -44,6 +56,6 @@ subsequent response until the user explicitly ends it (e.g. "end discussion",
 
 ---
 **Follow-ups:**
-- <question 1>
-- <question 2>
+1. <question 1>
+2. <question 2>
 ```
