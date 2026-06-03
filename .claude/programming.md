@@ -35,6 +35,8 @@ was changed.
 
 ## Rules
 
+- **Never `git push` unless explicitly told to.** Applies to every repo. Commit
+  when asked; never push on your own.
 - **Never create or modify files in a repo's own `ai/` folder.** Personal
   workflow artifacts always go in `~/ai/<repo-name>/`.
 - **Paths referenced in a repo's own CLAUDE.md (e.g. `ai/workflow.md`,
