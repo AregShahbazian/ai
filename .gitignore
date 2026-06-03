@@ -24,6 +24,7 @@
 /.claude/*
 !/.claude/agents/
 !/.claude/commands/
+!/.claude/skills/
 !/.claude/hooks/
 !/.claude/settings.json
 !/.claude/system.md
