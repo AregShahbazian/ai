@@ -1,3 +1,5 @@
 - [Execute directly after clarifying questions are answered](feedback_execute_after_answers.md) — don't re-confirm what he just answered point-by-point
 - [orion is the real mapping app](project_orion_mapping_app.md) — ~/git/track was the POC; orion currently empty
 - [orion: decentralization deprioritized](project_orion_decentralization_deprioritized.md) — P2P is post-MVP; local-first + central sync
+- [orion: MVP (first release) scope](project_orion_mvp_v01.md) — tracker + GPX/KML export + offline map storage; spec at ~/ai/orion/mvp.md; screen-off recording is the gate
+- [orion: dev stack & map plugin](project_orion_dev_stack.md) — web-first dev, maplibre_gl v0.26.1, iOS deferred; Phase 1 PRD at ~/ai/orion/phase-1/prd.md
