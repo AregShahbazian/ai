@@ -90,8 +90,11 @@ Design and implementation choices based on the PRD, followed by concrete tasks.
 Apply the code changes from the design + tasks (or from review fixes).
 
 **Prompt scope:** Write code, then:
-- **Update `review.md`** — create or append a verification checklist for what was implemented. Testing steps go in the review doc, not in the chat.
-- **Apply steps** — mention in chat what's needed to see the changes (HMR, restart webpack, rebuild lib, yarn install, etc.). Only include steps that are actually needed.
+- **Update `review.md`** — create or append the full verification checklist for what was implemented (the durable record lives in the review doc).
+- **After each task, present two short sections in chat:**
+  - **What to test** — a few concrete things to check that this task works.
+  - **How to apply changes** — the exact commands/steps to see it (e.g. `flutter pub get`, hot restart, `flutter run -d chrome`, rebuild). Only steps actually needed.
+  Keep both short — instructions/descriptions, not essays. The full checklist still goes in `review.md`; these are the at-a-glance per-task version.
 
 ### 4. Review
 
