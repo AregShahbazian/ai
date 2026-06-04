@@ -14,7 +14,7 @@ more **task dirs**, and **each task** holds its own workflow docs
 (`prd.md` → `design.md` → `tasks.md` → `review.md`).
 
 ### Phase 1 — Map Shell (single full-screen map, Philippines focus)
-- **Map Shell** → [`phase-1/map-shell/prd.md`](phase-1/map-shell/prd.md) (`id: phase-1-map`) — PRD done; design/tasks pending
+- **Map Shell** → [`phase-1/map-shell/prd.md`](phase-1/map-shell/prd.md) (`id: phase-1-map`) — ✅ **implemented & verified on device (2026-06-04)**; branch `phase-1-map`. (Launcher name/icon to confirm on a release install.)
 
 ### Phase 2+ — TBD
 - Recording → viewing → export → offline; sequencing not yet defined.
@@ -38,7 +38,7 @@ are the links to follow when picking up new work.
 Pulled from discussion `## Ideas to realize` sections. Implement → then check the
 box and reference the source discussion in the commit/PRD.
 
-- [ ] **Phase 1: Map Shell** — Flutter + `maplibre_gl` v0.26.1, OpenFreeMap `liberty`, Philippines bbox, all gestures, offline indicator, web-first → *2026-06-04 mvp-expansion / dev-loop*
+- [x] **Phase 1: Map Shell** — Flutter + `maplibre_gl` v0.26.1, OpenFreeMap `liberty`, Philippines bbox, all gestures, offline indicator → ✅ done, verified on device 2026-06-04 → *2026-06-04 mvp-expansion / dev-loop*
 - [ ] **Track recording** — start/stop/pause, reliable background/screen-off (MVP acceptance gate) → *2026-06-04 mvp-expansion*
 - [ ] **Track viewing** — stats, polyline, saved-tracks list (toggle/rename/delete) → *2026-06-04 mvp-expansion*
 - [ ] **Export** — GPX & KML → *2026-06-04 mvp-expansion*

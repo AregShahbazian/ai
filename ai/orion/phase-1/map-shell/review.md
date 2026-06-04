@@ -26,12 +26,17 @@ flutter install                       # or: adb install -r build/app/outputs/flu
 
 ## Round 1 — initial map-shell verification (pending)
 
-1. [ ] App launches **directly to a full-screen map**; no other UI/navigation.
-2. [ ] Renders OpenFreeMap `liberty` tiles.
-3. [ ] Gestures work: pan, pinch + double-tap zoom, rotate, tilt.
-4. [ ] Initial view frames the **whole Philippines**; correct across window sizes & after rotation.
-5. [ ] **Portrait + landscape** both work; map reframes on rotation.
-6. [ ] **Offline:** browse online, then network off → indicator shows, cached tiles render, **no error screen**, app usable → back online → indicator hides.
-7. [ ] **No permission prompts** (no location).
-8. [ ] Attribution (OpenFreeMap / OpenMapTiles / OSM) visible (web + device).
-9. [ ] App identity correct: name **Orion** + `track`'s icon; builds & pans smoothly on the **Zenfone 10**.
+Verified on the **Zenfone 10 via `flutter run` (2026-06-04)** — app builds and runs on device.
+
+1. [x] App launches **directly to a full-screen map**; no other UI/navigation. ✅ device
+2. [x] Renders OpenFreeMap `liberty` tiles. ✅ device
+3. [x] Gestures work: pan, pinch + double-tap zoom, rotate, tilt. ✅ device
+4. [x] Initial view frames the **whole Philippines**; correct across window sizes & after rotation. ✅ device
+5. [x] **Portrait + landscape** both work; map reframes on rotation. ✅ device
+6. [x] **Offline:** browse online, then network off → indicator shows, cached tiles render, **no error screen**, app usable → back online → indicator hides. ✅ device
+7. [x] **No permission prompts** (no location). ✅ device
+8. [x] Attribution (OpenFreeMap / OpenMapTiles / OSM) visible (web + device). ✅ device
+9. [x] App identity / runs on the **Zenfone 10** — builds & runs via `flutter run`. ✅ device  _(launcher name/icon to confirm on a release install)_
+
+**Round 1: PASS — Phase 1 / map-shell verified on device (2026-06-04).** Only the
+launcher name/icon remains to confirm on a release-APK install (cosmetic).
