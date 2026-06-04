@@ -55,14 +55,18 @@ device) before any product features are built. No tracking, no other pages.
 ### Branding
 10. The app ships with the correct application identity: name **Orion**,
     `applicationId` **`com.mby4m.orion`**.
-11. The **app logo** will be provided by the user later. Phase 1 may ship with a
-    placeholder launcher icon; the requirement is that the logo is swappable when
-    delivered.
+11. **Reuse the `track` POC's logo / placeholder launcher icon** for now. It may
+    change later; the requirement is that the logo/icon is swappable when a final
+    one is provided.
+
+### Display
+12. The app supports **both portrait and landscape** orientations, and the map
+    re-frames correctly on rotation.
 
 ### Quality
-12. The app must build and run on the primary test device (**Asus Zenfone 10,
+13. The app must build and run on the primary test device (**Asus Zenfone 10,
     Android 15**) and render/pan/zoom the map smoothly.
-13. Built on a **stable, proven stack and dependency versions**. (Specific
+14. Built on a **stable, proven stack and dependency versions**. (Specific
     package and version selection — including the MapLibre Flutter plugin choice —
     is a design-phase decision, not fixed by this PRD.)
 
@@ -80,9 +84,11 @@ device) before any product features are built. No tracking, no other pages.
 
 ## Open questions
 
-1. Supported orientations — portrait only, or portrait + landscape?
-2. Should a placeholder launcher icon ship in Phase 1, or wait for the real logo
-   before any Play upload?
+1. ~~Supported orientations?~~ **Resolved:** **portrait + landscape** (req. 12).
+2. ~~Placeholder icon now or wait for logo?~~ **Resolved:** **reuse `track`'s
+   logo/placeholder** for now; swappable later (req. 11).
+
+_All open questions resolved — ready for design + tasks._
 
 ## Related
 - `~/ai/orion/mvp.md` — first-release MVP definition
