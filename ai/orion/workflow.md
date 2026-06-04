@@ -7,6 +7,15 @@ Inherits the shared workflow at `~/ai/workflow.md`. Repo-specific overrides go h
 as they emerge.
 
 ## Layout
-- `~/ai/orion/<feature-slug>/` — PRDs, design, tasks, review per feature/subtask
-- `~/ai/orion/deps/` — reference docs about related/sibling repos
-- `~/ai/orion/bugfix/` — `.fix.md` bug investigation notes
+- `~/ai/orion/README.md` — **root overview** (entry point): phases, discussions,
+  ideas-to-realize backlog. Regenerate with `/save-workflow`.
+- `~/ai/orion/mvp.md` — first-release MVP definition.
+- `~/ai/orion/phase-<N>/<task>/` — **phases contain task dirs**; each task dir
+  holds its own `prd.md` → `design.md` → `tasks.md` → `review.md`. No `prd.md`
+  sits directly in a phase dir.
+- `~/ai/orion/discussions/` — `YYYY-MM-DD-<slug>.md` discussion summaries.
+- `~/ai/orion/deps/` — reference docs about related/sibling repos.
+- `~/ai/orion/bugfix/` — `.fix.md` bug investigation notes.
+
+`README.md` and `mvp.md` are the references into the phases/tasks; keep their
+links concise (run `/save-workflow` to refresh them).
