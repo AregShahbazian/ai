@@ -3,6 +3,37 @@
 Design for PRD `devbox-core`. Build-then-serve-static model; one provisioning path
 that runs the same locally and on a future Ubuntu VPS, differing only by config.
 
+## Deployment model: Docker container (host runs only Docker + Tailscale)
+
+The whole devbox runs as **one container** (image `orion-devbox`), so the host stays
+clean — no Flutter/Android/Claude on the host PATH. The host needs only **Docker**
+and **Tailscale**.
+
+```
+host (laptop now / cheap CPU VPS later): docker + tailscale only
+└─ container "orion-devbox"  (Dockerfile = the verified provision/*.sh steps)
+   ├─ flutter + android-sdk + jdk   (baked in image, /opt)
+   ├─ claude + tmux + our scripts   (on PATH for login shells)
+   ├─ sshd (hardened, user `dev`)   → published host :2222
+   └─ serve (static)                → published host :8080
+volumes (persist across rebuild): devbox-data (clone+build+serve),
+   devbox-claude (login), devbox-sshkeys (stable host keys)
+phone → (Tailscale/LAN) → host :2222 ssh / :8080 web → container
+```
+
+- **Repo cloning** uses a GitHub **deploy key** mounted from `secrets/deploy_key`
+  (the Orion repo is private). The entrypoint installs it for `dev` and rewrites
+  `https://github.com/` → `git@github.com:` so the existing URLs auth via the key.
+- **Phone SSH key** is provided in `secrets/authorized_keys`; the entrypoint installs
+  it into `dev`'s `~/.ssh` (mounted to a neutral path to dodge uid-mapping).
+- **`provision/host-setup.sh`** bootstraps the host: installs Docker + Tailscale,
+  adds a swapfile on low-RAM boxes (Gradle is memory-bursty), prints next steps.
+- The original `provision/10..50-*.sh` are reused **as the image build steps**, so a
+  container build and a bare-metal install provision identically.
+
+The tmux / build / serve sections below describe what happens **inside** the
+container; they are unchanged by containerisation.
+
 ## Architecture
 
 ```

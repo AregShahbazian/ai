@@ -124,3 +124,26 @@ lands on `main`. (My earlier "code not pushed" note was wrong — it was the bra
       derive defaults from the (possibly overridden) `DEVBOX_HOME`.
 - [x] Verified: single `DEVBOX_HOME` override repoints all paths; explicit per-key
       overrides still win; no-config defaults stay isolated from `~/git`.
+
+---
+
+## Docker pivot — containerised devbox ✅ (verified locally)
+
+Pivoted from native-on-host to a container (host runs only Docker + Tailscale).
+Image `orion-devbox` (~4.85 GB) reuses `provision/10-20-30` as build steps.
+
+- [x] Image builds clean (after fixes: `10-system` `$SUDO env` assignment;
+      `20-flutter` SIGPIPE on `yes | sdkmanager`; `/run/sshd` at startup; **JDK 21**
+      — `maplibre_gl` needs source release 21).
+- [x] Container starts; entrypoint installs host keys + phone `authorized_keys`,
+      clones private repos via mounted **deploy key** (https→ssh rewrite).
+- [x] **SSH login** as `dev` (key-only, hardened) over published `:2222`.
+- [x] Toolchain in login shell: JDK 21.0.11, Flutter 3.44.1, Claude 2.1.162, tmux,
+      scripts on PATH.
+- [x] **Real `build-apk` inside the container** → `orion.apk` **71 MB**, valid
+      (classes.dex + libflutter.so arm64/armeabi), full `web/` build.
+- [x] `serve` → `host:8080/orion.apk` returns **200, 74 MB**.
+- [x] `serve`/`serve-stop`, private clone, deploy-key auth all verified.
+
+**Deferred to the VPS (T8):** real `host-setup.sh` run on a fresh host; dedicated
+GitHub deploy key; `tailscale up`; phone connect; one-time Claude login.
