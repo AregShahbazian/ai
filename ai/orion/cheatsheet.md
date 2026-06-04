@@ -1,50 +1,56 @@
 # Orion — Flutter Command Cheatsheet
 
-Short reference. Run from repo root `~/git/orion`.
-**`maplibre_gl` supports Android / iOS / web only — no desktop.** Web is the dev loop.
+Run from repo root `~/git/orion`.
+**`maplibre_gl` supports Android / iOS / web only — no desktop.** Web (Chrome) is the dev loop.
 
-## Setup / maintenance
+## First-time setup (once per machine / fresh clone)
 ```
-flutter pub get            # fetch dependencies
-flutter clean              # wipe build artifacts
-flutter doctor             # toolchain health check
-flutter analyze            # static analysis
-flutter test               # unit / widget tests
-```
-
-## Run (dev)
-```
-flutter run -d chrome                        # web — primary dev loop
-flutter run -d web-server --web-port 8080    # web, headless server
-flutter devices                              # list available targets
-flutter run                                  # default connected device
-flutter run -d <device-id>                   # specific device
+flutter doctor                      # verify toolchain is healthy
+flutter doctor --android-licenses   # accept Android SDK licenses (needed for device builds)
+flutter pub get                     # fetch dependencies
+flutter run -d chrome               # first launch in the browser
 ```
 
-## Android device (Zenfone 10)
+## Anytime dev (daily loop)
 ```
-# enable Developer Options + USB debugging, connect via USB
-adb devices                # confirm device is visible
-flutter run                # debug build on device
-flutter logs               # stream device logs
+flutter run -d chrome               # launch web with hot reload
+#   in the running session:  r = hot reload   R = hot restart   q = quit
+flutter devices                     # list available targets
+flutter analyze                     # static analysis
+flutter logs                        # stream logs (when on a device)
+```
+
+## When dependencies change (edited pubspec.yaml)
+```
+flutter pub get                     # re-fetch after changing deps
+flutter clean && flutter pub get    # if the build misbehaves after a change
+# web map deps: ensure the maplibre-gl <script>/<link> in web/index.html
+# still match the maplibre_gl plugin's required version
+```
+
+## Android device (Zenfone 10) — when you can connect it
+```
+# enable Developer Options + USB debugging on the phone, connect via USB
+adb devices                         # confirm the phone is visible
+flutter run                         # debug build on the device
 ```
 
 ## Build (release)
 ```
-flutter build web --release          # → build/web/
-flutter build apk --release          # → build/app/outputs/flutter-apk/app-release.apk
-flutter build appbundle --release    # → build/app/outputs/bundle/release/  (Play Store upload)
+flutter build web --release         # → build/web/
+flutter build apk --release         # → build/app/outputs/flutter-apk/app-release.apk
+flutter build appbundle --release   # → build/app/outputs/bundle/release/  (Play Store upload)
 ```
 
 ## Install to connected device
 ```
-flutter install                                                # install release build
+flutter install                                                # install the release build
 adb install -r build/app/outputs/flutter-apk/app-release.apk   # manual APK install
 ```
 
-## Release signing (keystore) — only needed for Play Store builds
-Not needed for Phase 1 / dev. Debug signing works for `flutter run` on device.
-Set up once, before the first `.aab` upload:
+## Release signing (keystore) — only for Play Store builds
+Not needed for dev. Debug signing works for `flutter run` on device. Set up once,
+before the first `.aab` upload:
 ```
 # 1. Generate the upload keystore (keep OUTSIDE the repo; back it up; remember passwords)
 keytool -genkey -v -keystore ~/orion-upload-keystore.jks \
