@@ -147,3 +147,32 @@ Image `orion-devbox` (~4.85 GB) reuses `provision/10-20-30` as build steps.
 
 **Deferred to the VPS (T8):** real `host-setup.sh` run on a fresh host; dedicated
 GitHub deploy key; `tailscale up`; phone connect; one-time Claude login.
+
+---
+
+## RESUME HERE (2026-06-05)
+
+**Done:** Docker devbox fully built + verified locally (real 71 MB APK builds inside
+the container, served, SSH works). Helper scripts added: `provision/github-key.sh`
+(gen key + print GitHub paste), `upload-key.sh` (laptop → push+run it on a server via
+`deploy.conf`), `CHEATSHEET.md`, `RUNBOOK.md`.
+
+**VPS provisioned:** Contabo Cloud VPS 10 (4 vCPU / 8 GB / 75 GB NVMe), Ubuntu,
+Singapore — IP **46.250.232.224**, user root. Order 15045202.
+
+**State:**
+- Code repo: clean; **3 commits unpushed** (cheatsheet, github-key, upload-key).
+  GitHub `orion-dev-box` is PRIVATE and still at the first push (T1..JDK21) — fresh
+  clones won't have the 3 helpers until pushed.
+- Local container `orion-devbox` left **running** on the laptop (`docker compose down`
+  to stop).
+
+**Next steps (tomorrow), on the laptop then the VPS:**
+1. `sudo apt install -y sshpass`; `cp deploy.conf.example deploy.conf` + set password;
+   `./upload-key.sh` → add printed key to GitHub account SSH keys.
+2. PUSH the 3 unpushed commits (asked, not yet approved) so the VPS clone is complete.
+3. On VPS: `git clone … && cd orion-dev-box`; `cp ~/.ssh/id_ed25519 secrets/deploy_key`;
+   add phone pubkey to `secrets/authorized_keys`.
+4. `./provision/host-setup.sh`; `tailscale up`; `docker compose up -d --build`;
+   one-time `claude` login.
+5. Connect from phone (Tailscale + Termius :2222 user dev + browser :8080).
