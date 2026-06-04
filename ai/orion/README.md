@@ -56,5 +56,8 @@ box and reference the source discussion in the commit/PRD.
 - Stack: Flutter + **`maplibre_gl` v0.26.1** + SQLite (Drift TBD); **web-first** dev, phone for native.
 - Decentralization: **post-MVP**; local-first + central sync.
 - iOS: deferred, kept clean.
+- Export: **GPX first** (KML/others later). Offline UX mirrors `track`.
+- Tiles: OpenFreeMap public server for **MVP1**; **self-host PH tiles post-MVP1**.
+- Background recording target: **wide range of common PH Android phones** (incl. aggressive OEMs).
 
 (Durable decisions also live in memory — see `MEMORY.md` pointers prefixed `orion:`.)
