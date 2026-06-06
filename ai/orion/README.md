@@ -24,6 +24,7 @@ more **task dirs**, and **each task** holds its own workflow docs
 - **Follow Me** → [`phase-2/follow-me/prd.md`](phase-2/follow-me/prd.md) (`id: phase-2-follow-me`) — planned. HUD button cycles Off → Follow → Follow+Heading via stock MapLibre tracking modes.
 - **Heading Arrow** → [`phase-2/heading-arrow/prd.md`](phase-2/heading-arrow/prd.md) (`id: phase-2-heading-arrow`) — planned (must-have). Directional cone on the dot via `MyLocationRenderMode.compass`.
 - **Accuracy Circle** → [`phase-2/accuracy-circle/prd.md`](phase-2/accuracy-circle/prd.md) (`id: phase-2-accuracy-circle`) — planned (nice to have). Translucent halo sized to reported GPS accuracy.
+- **Reset-orientation button** → [`phase-2/reset-orientation/prd.md`](phase-2/reset-orientation/prd.md) (`id: phase-2-reset-orientation`) — implemented (analyze clean, on-device verify pending); branch `feature/p2-reset-orientation`. One Flutter `CompassButton` (replaces native compass) appears on rotate **or** tilt, resets both. Full PRD→design→tasks→review.
 
 ### Phase 3+ — TBD
 - Recording → viewing → export → offline; sequencing not yet defined.
