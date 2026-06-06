@@ -1,7 +1,7 @@
 ---
 id: phase-2-accuracy-circle
 title: Accuracy Circle — location uncertainty halo
-status: implemented & built-in (verify pending); branch feature/p2-heading-accuracy
+status: implemented & verified (2026-06-06): web circle visible; Android heading-arrow works, circle not shown — accepted; branch feature/p2-heading-accuracy
 branch: (tbd)
 ---
 
