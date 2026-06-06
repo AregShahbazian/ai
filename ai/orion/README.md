@@ -54,6 +54,15 @@ re-renders/repaints. Confirm our impl is at least as efficient. No PRDs yet.
 Record tracks live: new HUD button(s) to start/stop, store tracks **locally**.
 **No account/backend yet.** More details to follow. No PRDs yet.
 
+### Phase 8 — Language support (i18n)
+Localize **as much of the app as possible** — **at least 2 languages** to start
+(**English** + **Tagalog/Filipino**, matching the PH focus; `~/git/track` already
+had `app_en.arb` / `app_tl.arb` to mine). Set up `flutter_localizations` + `intl`
+with ARB message files, **externalize every user-facing string** (the lone
+`_kLocationDeniedMessage` const today folds in here), follow the device locale with
+an optional in-app override, and keep it easy to add more languages later. Built so
+any new feature ships its strings localized from the start. No PRDs yet.
+
 > Note: "Phase 4 — Navigation" is **app-screen navigation**, not GPS routing/A→B
 > routing, which remains out of scope (see [`mvp.md`](mvp.md)).
 
