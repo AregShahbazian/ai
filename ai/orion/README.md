@@ -27,9 +27,10 @@ User location, plus all the location/map-polish tasks already scoped below.
 - **Heading Arrow** → [`phase-2/heading-arrow/prd.md`](phase-2/heading-arrow/prd.md) (`id: phase-2-heading-arrow`) — implemented (verify pending); branch `feature/p2-heading-accuracy`. Stock `MyLocationRenderMode.compass` (gated on `enabled`); heading cone on native, plain dot on web. Full PRD→design→tasks→review.
 - **Accuracy Circle** → [`phase-2/accuracy-circle/prd.md`](phase-2/accuracy-circle/prd.md) (`id: phase-2-accuracy-circle`) — implemented & built-in (verify pending); branch `feature/p2-heading-accuracy`. No code — MapLibre draws the metric ring by default (native) + web `showAccuracyCircle`; visible at street zoom. Full PRD→design→tasks→review.
 - **Reset-orientation button** → [`phase-2/reset-orientation/prd.md`](phase-2/reset-orientation/prd.md) (`id: phase-2-reset-orientation`) — ✅ **implemented & verified on device (2026-06-06)**; branch `feature/p2-reset-orientation`. One Flutter `CompassButton` (replaces native compass) appears on rotate **or** tilt, resets both. Full PRD→design→tasks→review.
+- **Dev Logging** → [`phase-2/dev-logging/prd.md`](phase-2/dev-logging/prd.md) (`id: phase-2-dev-logging`) — implemented (verify pending); branch `feature/p2-dev-logging`. One structured `devLog(scope, data)` path tagged `orion.<scope>` — collapsable in the web console, DevTools Logging tab on Android — so debugging is the same motion everywhere and nothing is lost to flat text. `avoid_print` enforced. Full PRD→design→tasks→review.
 
 ### Phase 3 — Interaction Controller (app-global command bus + interaction log)
-- **Interaction Controller** → [`phase-3/interaction-controller/prd.md`](phase-3/interaction-controller/prd.md) (`id: phase-3-interaction-controller`) — implemented (verify pending); branch `feature/p3-interaction-controller`. One app-global channel for every meaningful interaction: **dispatch** programmatically (as if the user did them) and **observe + locally log** the last N. Hand-rolled command bus + ring-buffer interceptor (decided against `flutter_bloc` — Orion is plain `ChangeNotifier`), closed hierarchical taxonomy (`domain.subject.action`). HUD/map interactions retrofitted to dispatch through it; web-only dev console bridge (`orion.dispatch(...)`). In-memory only — persistence/export deferred. Full PRD→design→tasks→review.
+- **Interaction Controller** → [`phase-3/interaction-controller/prd.md`](phase-3/interaction-controller/prd.md) (`id: phase-3-interaction-controller`) — **in progress**; branch `feature/p3-interaction-controller` (pushed). One app-global channel for every meaningful interaction: **dispatch** programmatically (as if the user did them) and **observe + locally log** the last N. Hand-rolled command bus + ring-buffer interceptor (decided against `flutter_bloc` — Orion is plain `ChangeNotifier`), closed hierarchical taxonomy (`domain.subject.action`). HUD/map interactions retrofitted to dispatch through it; web-only dev console bridge (`orion.dispatch(...)`). In-memory only — persistence/export deferred. Full PRD→design→tasks→review.
 
 ### Phase 4 — Navigation (app shell)
 A new full screen, reached via a HUD button — the home for what comes later
@@ -80,6 +81,7 @@ are the links to follow when picking up new work.
 | 2026-06-04 | Dev loop (web-first) & map plugin (`maplibre_gl` v0.26.1) | [`discussions/2026-06-04-dev-loop-and-map-plugin.md`](discussions/2026-06-04-dev-loop-and-map-plugin.md) | yes |
 | 2026-06-04 | Devbox & driving Orion dev from the phone | [`discussions/2026-06-04-devbox-and-phone-access.md`](discussions/2026-06-04-devbox-and-phone-access.md) | yes |
 | 2026-06-04 | Runtime-state inspection in dev flow (brainstorm) | [`discussions/2026-06-04-runtime-state-inspection.md`](discussions/2026-06-04-runtime-state-inspection.md) | yes (deferred) |
+| 2026-06-06 | Dev-mode log monitoring (web + Android), one structured path | [`discussions/2026-06-06-dev-log-monitoring.md`](discussions/2026-06-06-dev-log-monitoring.md) | yes (partly done) |
 
 ## Backlog — ideas to realize (with source)
 
@@ -94,6 +96,11 @@ box and reference the source discussion in the commit/PRD.
 - [ ] **App logo / branding** — integrate when provided → *2026-06-04 mvp-expansion*
 - [ ] **Dev workflow** — Flutter web as primary debug target; phone for location/recording/offline → *2026-06-04 dev-loop*
 - [ ] **Runtime-state inspection** — pick mechanism once app runs (DevTools / Playwright+`window` / VM Service / mobile endpoint) → *2026-06-04 runtime-state-inspection*
+- [x] **Structured dev logger `devLog`** — one tagged path, collapsable web / DevTools Logging on Android → ✅ done 2026-06-06 (`feature/p2-dev-logging`) → *2026-06-06 dev-log-monitoring*
+- [ ] **Log funnel enforcement** — `avoid_print: error` (done); later discourage direct `dart:developer` outside `core/log` → *2026-06-06 dev-log-monitoring*
+- [ ] **Log levels / severity + timestamps** — extend `devLog` without breaking the `(scope, data)` call site → *2026-06-06 dev-log-monitoring*
+- [ ] **Android fold-tree log inspection** — in-app overlay or route native logs to the browser console (VM service) for web-like expand/collapse → *2026-06-06 dev-log-monitoring*
+- [ ] **Bug-report capture** — attach the last N records to bug reports; overlaps Phase 3 interaction log → *2026-06-06 dev-log-monitoring*
 - [ ] **iOS groundwork** — keep platform code isolated; no Apple builds yet → *2026-06-04 dev-loop*
 - [ ] **Plugin re-evaluation (future)** — revisit newer `maplibre` plugin → *2026-06-04 dev-loop*
 - [ ] **Self-host PH tiles (post-MVP1)** — before real-scale launch, host OpenFreeMap weekly full-planet MBTiles for the offline feature instead of scraping the public server → *mvp.md Q4*
