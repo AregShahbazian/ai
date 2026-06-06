@@ -92,6 +92,49 @@ infra; reuses the sanctioned `devLog` path.
 - `CompassButton.onReset`: `() => dispatch(resetOrientationTap)`.
 - `MapLibreMap.onCameraTrackingDismissed`: `() => dispatch(mapTrackingDismissed)`.
 
+## Convention — route every interaction through the controller (both directions)
+
+**Binding rule for all future work:** any new user-facing action or interaction
+Orion exposes MUST be wired through the `InteractionController`, in **both
+directions**:
+
+- **Inbound (capture):** the action is recorded as it happens. A real user action
+  routes its *execution* through `dispatch(id)`; a native gesture the framework
+  performs before we hear about it is recorded with `observe(id)` (record-only).
+  Either way it lands in the ring buffer under a taxonomy id.
+- **Outbound (dispatch):** the same `id` is programmatically dispatchable
+  (`origin: programmatic`) and reproduces the *exact* effect of the user action,
+  because it hits the same registered handler.
+
+Concretely, adding an interaction means: (1) add its const to
+`interaction_ids.dart` + `all`; (2) `register` a handler (outbound) and/or
+`observe` it at the capture site (inbound); (3) it is then automatically reachable
+from both remote-control surfaces — `window.orion.dispatch(id, payload)` on web and
+the `ext.orion.dispatch` VM service extension on native (driven by
+`tool/orion_remote.dart` / `scripts/mobile/orion.sh`). No interaction should bypass
+the funnel with an inline handler call.
+
+### Remote control surfaces
+
+The bus is reachable from outside the app on both platforms, so interactions can
+be driven (and the buffer inspected) without touching the UI:
+
+- **Web** — the console bridge (`console_bridge_web.dart`) installs `window.orion`
+  in the browser DevTools console: `orion.dispatch(id, payload)`, `orion.logEvents(bool)`,
+  `orion.dump()`, `orion.ids`, `await orion.ready`. Installed on every build.
+- **Native (mobile)** — there's no browser console, so the same controls are
+  registered as **VM service extensions** (`console_bridge_io.dart`):
+  `ext.orion.dispatch | logEvents | dump | ids`. Drive them from the laptop over
+  the device's VM Service:
+  - `scripts/mobile/run.sh` launches the app and records the VM Service URI to
+    `.dart_tool/orion_vmservice` on each launch.
+  - `scripts/mobile/orion.sh <cmd> [k=v…]` (→ `tool/orion_remote.dart`, a
+    dependency-free JSON-RPC-over-WebSocket client) reads that URI automatically
+    and calls the extension. E.g. `./scripts/mobile/orion.sh dump`.
+  - Everything is localhost-forwarded (USB or wireless `adb`), so it survives
+    Wi-Fi/LAN switches. Service extensions exist only in **debug/profile** builds
+    (no VM Service in a release AOT build); the web `window.orion` works in release.
+
 ## Open questions (deferred — not in this increment)
 
 - **Persistence** of the ring buffer across restart (PRD requirement): pick

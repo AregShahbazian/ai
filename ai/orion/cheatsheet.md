@@ -33,6 +33,21 @@ flutter clean && flutter pub get    # if the build misbehaves after a change
 # enable Developer Options + USB debugging on the phone, connect via USB
 adb devices                         # confirm the phone is visible
 flutter run                         # debug build on the device
+./scripts/mobile/run.sh             # …or: filtered logs + records the VM Service URI
+```
+
+## Driving interactions remotely (the InteractionController bus)
+```
+# Web — in the browser DevTools console (window.orion, installed every build):
+await orion.dispatch('hud.followMe.tap')
+orion.logEvents(true); orion.dump(); orion.ids
+
+# Mobile — from the laptop, against a running ./scripts/mobile/run.sh (debug/profile):
+./scripts/mobile/orion.sh dump                 # → captured interaction buffer
+./scripts/mobile/orion.sh logEvents on=true    # toggle per-event logging
+./scripts/mobile/orion.sh dispatch id=hud.followMe.tap
+./scripts/mobile/orion.sh ids
+# URI auto-read from .dart_tool/orion_vmservice; localhost-forwarded (survives wifi switch)
 ```
 
 ## Build (release)

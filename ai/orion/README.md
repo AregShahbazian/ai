@@ -116,5 +116,6 @@ box and reference the source discussion in the commit/PRD.
 - Export: **GPX first** (KML/others later). Offline UX mirrors `track`.
 - Tiles: OpenFreeMap public server for **MVP1**; **self-host PH tiles post-MVP1**.
 - Background recording target: **wide range of common PH Android phones** (incl. aggressive OEMs).
+- **Interactions:** every new user action wires through the `InteractionController` **both ways** — captured (`dispatch`/`observe`) and programmatically dispatchable; reachable remotely via `window.orion` (web) and `ext.orion.*` VM service extensions (native, `scripts/mobile/orion.sh`). No inline-handler bypass. See `phase-3/interaction-controller/design.md`.
 
 (Durable decisions also live in memory — see `MEMORY.md` pointers prefixed `orion:`.)
