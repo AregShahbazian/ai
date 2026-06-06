@@ -8,7 +8,7 @@ id: phase-2-reset-orientation
 
 **Date:** 2026-06-06
 **Phase:** 2 (map polish)
-**Status:** planned; branch `feature/p2-reset-orientation`
+**Status:** implemented & verified on device (2026-06-06); branch `feature/p2-reset-orientation`
 
 ## Problem
 

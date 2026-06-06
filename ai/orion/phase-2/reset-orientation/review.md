@@ -6,7 +6,7 @@
 
 Single Flutter `CompassButton` replaces the native compass. Appears on
 `bearing≠0 || tilt≠0`, needle tracks bearing, tap animates back to bearing 0 +
-tilt 0. `flutter analyze` clean.
+tilt 0. `flutter analyze` clean. ✅ Verified on device 2026-06-06.
 
 **Files:**
 - `lib/features/map/compass_button.dart` (new) — button + needle painter

@@ -1,8 +1,8 @@
 ---
 id: phase-2-my-location
 title: My Location — blue dot
-status: planned
-branch: (tbd)
+status: implemented (verify pending)
+branch: feature/p2-my-location
 ---
 
 ## Goal
