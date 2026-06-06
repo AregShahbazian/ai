@@ -6,6 +6,7 @@ Root index for Orion's planning docs. Start here. Orion is the real mapping app
 ## Canonical docs
 - **MVP definition** → [`mvp.md`](mvp.md) — the first-release scope.
 - **Feature backlog** → [`backlog.md`](backlog.md) — unsorted bag of feature ideas (`/feature`).
+- **Flutter cheatsheet** → [`cheatsheet.md`](cheatsheet.md) — setup / daily-dev / build commands.
 - **Bug fixes** → [`bugfix/`](bugfix/) — `.fix.md` investigation notes.
 - **Deps / reference** → [`deps/`](deps/)
 
