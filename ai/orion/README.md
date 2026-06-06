@@ -5,6 +5,8 @@ Root index for Orion's planning docs. Start here. Orion is the real mapping app
 
 ## Canonical docs
 - **MVP definition** → [`mvp.md`](mvp.md) — the first-release scope.
+- **Feature backlog** → [`backlog.md`](backlog.md) — unsorted bag of feature ideas (`/feature`).
+- **Bug fixes** → [`bugfix/`](bugfix/) — `.fix.md` investigation notes.
 - **Deps / reference** → [`deps/`](deps/)
 
 ## Phases
@@ -16,7 +18,10 @@ more **task dirs**, and **each task** holds its own workflow docs
 ### Phase 1 — Map Shell (single full-screen map, Philippines focus)
 - **Map Shell** → [`phase-1/map-shell/prd.md`](phase-1/map-shell/prd.md) (`id: phase-1-map`) — ✅ **implemented & verified on device (2026-06-04)**; branch `phase-1-map`. (Launcher name/icon to confirm on a release install.)
 
-### Phase 2+ — TBD
+### Phase 2 — Map polish
+- **Safe-area HUD** → [`phase-2/safe-area-hud/prd.md`](phase-2/safe-area-hud/prd.md) (`id: phase-2-safe-area`) — ✅ **implemented & verified on device (2026-06-06)**; branch `feature/p2-safe-areas`. PRD only (design/tasks/review pending). Native compass/attribution inset into the safe area + a single `SafeArea` overlay layer for future Flutter HUD.
+
+### Phase 3+ — TBD
 - Recording → viewing → export → offline; sequencing not yet defined.
 
 ## Discussions
@@ -31,6 +36,7 @@ are the links to follow when picking up new work.
 | 2026-06-03 | MVP v0.1 scope (**superseded** by `mvp.md`) | [`discussions/2026-06-03-mvp-v01-scope.md`](discussions/2026-06-03-mvp-v01-scope.md) | historical |
 | 2026-06-04 | MVP expansion, app identity, phases, Phase 1 | [`discussions/2026-06-04-mvp-expansion-and-phase1.md`](discussions/2026-06-04-mvp-expansion-and-phase1.md) | yes |
 | 2026-06-04 | Dev loop (web-first) & map plugin (`maplibre_gl` v0.26.1) | [`discussions/2026-06-04-dev-loop-and-map-plugin.md`](discussions/2026-06-04-dev-loop-and-map-plugin.md) | yes |
+| 2026-06-04 | Devbox & driving Orion dev from the phone | [`discussions/2026-06-04-devbox-and-phone-access.md`](discussions/2026-06-04-devbox-and-phone-access.md) | yes |
 | 2026-06-04 | Runtime-state inspection in dev flow (brainstorm) | [`discussions/2026-06-04-runtime-state-inspection.md`](discussions/2026-06-04-runtime-state-inspection.md) | yes (deferred) |
 
 ## Backlog — ideas to realize (with source)

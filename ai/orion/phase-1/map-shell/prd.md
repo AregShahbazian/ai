@@ -4,6 +4,8 @@ id: phase-1-map
 
 # Orion — Phase 1: Map Shell (PRD)
 
+> Part of Orion — see [`README.md`](../../README.md) (root overview).
+
 **Date:** 2026-06-04
 **Phase:** 1 of the first-release MVP (see `~/ai/orion/mvp.md`)
 **Scope of this doc:** requirements only — no design or implementation choices.
