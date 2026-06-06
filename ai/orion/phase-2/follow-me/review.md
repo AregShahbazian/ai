@@ -24,6 +24,8 @@ so the FAB owns bottom-right. `flutter analyze` clean.
 1. **Cycle (granted):** tap FAB → `my_location` (camera centers + follows as you
    move) → tap → `explore` (camera also rotates to heading) → tap → `location_searching`
    (free). Icon + tint (primary while following) match each state.
+   - **Exit from Follow+heading** also flattens the view: leaving `trackingCompass`
+     → off animates back to north-up / no-tilt (same as the reset-orientation button).
 2. **Auto-dismiss:** while following, pan/zoom by hand → follow stops, icon returns to
    `location_searching` (no fight between gesture and camera).
 3. **Permission off, tap FAB:** prompt appears → Allow → jumps straight to follow.
