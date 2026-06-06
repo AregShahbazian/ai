@@ -1,7 +1,7 @@
 ---
 id: phase-2-accuracy-circle
 title: Accuracy Circle — location uncertainty halo
-status: planned (nice to have)
+status: implemented & built-in (verify pending); branch feature/p2-heading-accuracy
 branch: (tbd)
 ---
 

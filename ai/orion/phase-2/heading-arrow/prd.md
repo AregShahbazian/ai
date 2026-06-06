@@ -1,7 +1,7 @@
 ---
 id: phase-2-heading-arrow
 title: Heading Arrow — directional indicator on the dot
-status: planned (must-have if no other heading cue)
+status: implemented (verify pending); branch feature/p2-heading-accuracy
 branch: (tbd)
 ---
 
