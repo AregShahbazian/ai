@@ -28,6 +28,12 @@ so the FAB owns bottom-right. `flutter analyze` clean.
      → off animates back to north-up / no-tilt (same as the reset-orientation button).
 2. **Auto-dismiss:** while following, pan/zoom by hand → follow stops, icon returns to
    `location_searching` (no fight between gesture and camera).
+2b. **Reset button vs follow (top-right reset is follow-aware):**
+   - In **Follow+heading**, tap reset → drops to **Follow** (heading cleared, still
+     centering on you) — does *not* turn follow off.
+   - In **Follow**, tap reset → stays in **Follow**, view snaps north-up/flat — does
+     *not* turn follow off.
+   - In **Off**, tap reset → animates bearing/tilt to 0 (unchanged).
 3. **Permission off, tap FAB:** prompt appears → Allow → jumps straight to follow.
 4. **Permanently denied, tap FAB:** SnackBar "enable in Settings" with a **Settings**
    action that opens the app settings page.
