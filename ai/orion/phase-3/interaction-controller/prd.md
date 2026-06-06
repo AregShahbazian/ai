@@ -1,9 +1,21 @@
 ---
 id: phase-3-interaction-controller
 title: Interaction Controller — app-global command bus + interaction log
-status: planned
-branch: TBD
+status: in progress
+branch: feature/p2-dev-logging
 ---
+
+## Decision: hand-rolled command bus (not flutter_bloc)
+
+Orion's state is plain `ChangeNotifier`s with no DI/bloc. Adopting
+`flutter_bloc` + `BlocObserver` would force rewriting app-wide state into
+events/states just to gain a diagnostics channel — overkill and lock-in. We
+instead ship a thin hand-rolled **`InteractionController`** (a command bus):
+a taxonomy registry + a single `dispatch` funnel + a ring-buffer interceptor.
+It layers over the existing controllers with zero rewrite, stays
+serializable/replayable, and keeps the door open to swap in bloc later if the
+app ever goes that way. (`BlocObserver` would only have won had we already
+been on bloc.)
 
 ## Goal
 
