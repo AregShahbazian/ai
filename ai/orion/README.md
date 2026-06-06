@@ -20,6 +20,10 @@ more **task dirs**, and **each task** holds its own workflow docs
 
 ### Phase 2 — Map polish
 - **Safe-area HUD** → [`phase-2/safe-area-hud/prd.md`](phase-2/safe-area-hud/prd.md) (`id: phase-2-safe-area`) — ✅ **implemented & verified on device (2026-06-06)**; branch `feature/p2-safe-areas`. PRD only (design/tasks/review pending). Native compass/attribution inset into the safe area + a single `SafeArea` overlay layer for future Flutter HUD.
+- **My Location** → [`phase-2/my-location/prd.md`](phase-2/my-location/prd.md) (`id: phase-2-my-location`) — planned. Blue dot at current GPS position; works on Android, iOS, web.
+- **Follow Me** → [`phase-2/follow-me/prd.md`](phase-2/follow-me/prd.md) (`id: phase-2-follow-me`) — planned. HUD button cycles Off → Follow → Follow+Heading via stock MapLibre tracking modes.
+- **Heading Arrow** → [`phase-2/heading-arrow/prd.md`](phase-2/heading-arrow/prd.md) (`id: phase-2-heading-arrow`) — planned (must-have). Directional cone on the dot via `MyLocationRenderMode.compass`.
+- **Accuracy Circle** → [`phase-2/accuracy-circle/prd.md`](phase-2/accuracy-circle/prd.md) (`id: phase-2-accuracy-circle`) — planned (nice to have). Translucent halo sized to reported GPS accuracy.
 
 ### Phase 3+ — TBD
 - Recording → viewing → export → offline; sequencing not yet defined.

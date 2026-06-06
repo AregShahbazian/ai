@@ -37,6 +37,9 @@ was changed.
 
 - **Never `git push` unless explicitly told to.** Applies to every repo. Commit
   when asked; never push on your own.
+- **Stage new files at creation.** Any file meant to be kept should be staged
+  immediately when created — don't leave workflow docs or other intentional files
+  in an untracked/unstaged state.
 - **Never create or modify files in a repo's own `ai/` folder.** Personal
   workflow artifacts always go in `~/ai/<repo-name>/`.
 - **Paths referenced in a repo's own CLAUDE.md (e.g. `ai/workflow.md`,
