@@ -14,3 +14,4 @@ up; check them off (`[x]`) or remove them once shipped.
       Appears below the compass button, disappears when re-focused. Implemented in `track/` but positioning logic may need rethinking for Orion.
 - [ ] Export route/track (partially) as an animated GIF  <!-- 2026-06-06 -->
       GIF is a map render that moves as if navigating through part of the track/route. Map choice, custom tags, etc. Future feature.
+- [ ] DevOps agent specialized for devops tasks  <!-- 2026-06-06 -->
