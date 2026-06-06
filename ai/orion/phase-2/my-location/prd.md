@@ -1,7 +1,7 @@
 ---
 id: phase-2-my-location
 title: My Location — blue dot
-status: implemented (verify pending)
+status: implemented & verified on device (2026-06-06)
 branch: feature/p2-my-location
 ---
 

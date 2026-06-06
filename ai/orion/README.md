@@ -21,35 +21,39 @@ more **task dirs**, and **each task** holds its own workflow docs
 ### Phase 2 — My Location (+ map polish)
 User location, plus all the location/map-polish tasks already scoped below.
 - **Safe-area HUD** → [`phase-2/safe-area-hud/prd.md`](phase-2/safe-area-hud/prd.md) (`id: phase-2-safe-area`) — ✅ **implemented & verified on device (2026-06-06)**; branch `feature/p2-safe-areas`. PRD only (design/tasks/review pending). Native compass/attribution inset into the safe area + a single `SafeArea` overlay layer for future Flutter HUD.
-- **My Location** → [`phase-2/my-location/prd.md`](phase-2/my-location/prd.md) (`id: phase-2-my-location`) — implemented (verify pending); branch `feature/p2-my-location`. MapLibre blue dot, foreground permission via `permission_handler`; auto on native, tap-to-locate button on web. Full PRD→design→tasks→review.
-- **Follow Me** → [`phase-2/follow-me/prd.md`](phase-2/follow-me/prd.md) (`id: phase-2-follow-me`) — implemented (verify pending); branch `feature/p2-follow-me`. Location FAB (ported from track) cycles Off → Follow → Follow+Heading via stock MapLibre tracking modes; manual pan auto-exits. Full PRD→design→tasks→review.
+- **My Location** → [`phase-2/my-location/prd.md`](phase-2/my-location/prd.md) (`id: phase-2-my-location`) — ✅ **implemented & verified on device (2026-06-06)**; branch `feature/p2-my-location`. MapLibre blue dot, foreground permission via `permission_handler`; auto on native, tap-to-locate button on web. Full PRD→design→tasks→review.
+- **Follow Me** → [`phase-2/follow-me/prd.md`](phase-2/follow-me/prd.md) (`id: phase-2-follow-me`) — ✅ **implemented & verified on device (2026-06-06)**; branch `feature/p2-follow-me`. Location FAB (ported from track) cycles Off → Follow → Follow+Heading via stock MapLibre tracking modes; manual pan auto-exits; reset button keeps follow. Full PRD→design→tasks→review.
 - **Heading Arrow** → [`phase-2/heading-arrow/prd.md`](phase-2/heading-arrow/prd.md) (`id: phase-2-heading-arrow`) — planned (must-have). Directional cone on the dot via `MyLocationRenderMode.compass`.
 - **Accuracy Circle** → [`phase-2/accuracy-circle/prd.md`](phase-2/accuracy-circle/prd.md) (`id: phase-2-accuracy-circle`) — planned (nice to have). Translucent halo sized to reported GPS accuracy.
 - **Reset-orientation button** → [`phase-2/reset-orientation/prd.md`](phase-2/reset-orientation/prd.md) (`id: phase-2-reset-orientation`) — ✅ **implemented & verified on device (2026-06-06)**; branch `feature/p2-reset-orientation`. One Flutter `CompassButton` (replaces native compass) appears on rotate **or** tilt, resets both. Full PRD→design→tasks→review.
 
-### Phase 3 — Navigation (app shell)
+### Phase 3 — Interaction Controller (app-global command bus + interaction log)
+- **Interaction Controller** → [`phase-3/interaction-controller/prd.md`](phase-3/interaction-controller/prd.md) (`id: phase-3-interaction-controller`) — planned. One app-global channel for every meaningful interaction: **dispatch** interactions programmatically (as if the user did them) and **observe + locally log** the last N. Realizes the Command-bus + interceptor pattern with a closed, hierarchical interaction taxonomy (`domain.subject.action`). Substrate for diagnostics (attach recent interactions to bug reports) and scripted/automated testing. PRD only.
+
+### Phase 4 — Navigation (app shell)
 A new full screen, reached via a HUD button — the home for what comes later
 (settings, tracks, routes). This phase only stands up the screen + navigation
-plumbing; the sections it hosts arrive in later phases. No PRDs yet.
+plumbing; the sections it hosts arrive in later phases. Models its
+screen-navigation interactions in the Phase 3 taxonomy from the start. No PRDs yet.
 
-### Phase 4 — Import / export tracks
+### Phase 5 — Import / export tracks
 Import existing **Gaia GPS exports** (and re-export them). Imported tracks get
 their own page and are **listed**: list items show a **summary**, the item-detail
 page shows **full stats**. **No map rendering of tracks yet.** `~/git/track` had
 import/export but its correctness was unverified — mine for reference, re-verify.
 No PRDs yet.
 
-### Phase 5 — Render tracks on map
+### Phase 6 — Render tracks on map
 Draw imported tracks on the map. Must be **efficient and scalable to much more
 data** than a single track: use the efficient drawing callback/API `track` used to
 keep the map smooth with multiple large tracks, and avoid unnecessary
 re-renders/repaints. Confirm our impl is at least as efficient. No PRDs yet.
 
-### Phase 6 — Track recording
+### Phase 7 — Track recording
 Record tracks live: new HUD button(s) to start/stop, store tracks **locally**.
 **No account/backend yet.** More details to follow. No PRDs yet.
 
-> Note: "Phase 3 — Navigation" is **app-screen navigation**, not GPS routing/A→B
+> Note: "Phase 4 — Navigation" is **app-screen navigation**, not GPS routing/A→B
 > routing, which remains out of scope (see [`mvp.md`](mvp.md)).
 
 ## Discussions

@@ -1,7 +1,7 @@
 ---
 id: phase-2-follow-me
 title: Follow Me — camera tracking toggle
-status: implemented (verify pending)
+status: implemented & verified on device (2026-06-06)
 branch: feature/p2-follow-me
 ---
 
