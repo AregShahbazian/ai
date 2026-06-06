@@ -1,8 +1,8 @@
 ---
 id: phase-2-follow-me
 title: Follow Me — camera tracking toggle
-status: planned
-branch: (tbd)
+status: implemented (verify pending)
+branch: feature/p2-follow-me
 ---
 
 ## Goal
