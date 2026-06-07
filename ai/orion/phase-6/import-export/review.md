@@ -84,4 +84,39 @@ Also `dependency_overrides: path_provider_foundation: 2.4.1` to drop `objective_
 17. Persistence: kill + relaunch → imported tracks still listed (Drift on device).
 
 ## Round notes
-_(none yet — first implementation pass.)_
+
+### Round 1: off-thread import (no UI freeze) (2026-06-07)
+
+Device/web testing surfaced import jank. Fixes (branch `feature/p6-import-export`):
+
+- **Badge consistency** — parse the whole selection first, set the badge to the
+  **total** track count, then store; so 15 one-track files and one 15-track file
+  both show the real total (was per-file, stuck at 1/0).
+- **Off-thread parsing** — the parse blocked the UI thread. Now
+  `parseGpxOffThread(bytes)` (conditional `gpx_offthread_io/web.dart`):
+  - **native** → `compute()` (background isolate).
+  - **web** → a **real Web Worker** (`web/gpx_worker.dart` → `gpx_worker.dart.js`),
+    because dart2js has no isolates (`compute` runs inline). dropped an interim
+    cooperative-yield parser in favour of the worker since **web is a production
+    target**, not just the dev loop.
+  - Required making the parse chain Flutter-free (moved the Drift-backed
+    `TrackFormatting` extension out of `track_model.dart` into `track_format.dart`)
+    so the worker compiles to JS.
+- **Build step** — the worker is a separate entrypoint flutter doesn't compile:
+  run `scripts/build_web_worker.sh` (`dart compile js`) and commit
+  `web/gpx_worker.dart.js` whenever the parser changes.
+- **file_picker** — auto-pinned to ancient 3.0.4 (no AGP namespace → Android
+  build failed). Bumped to **8.3.7** + **share_plus 10.1.4** (resolves a `win32`
+  clash; adjusted exporter to `Share.shareXFiles`). Bonus: web wasm dry-run now
+  passes.
+- **Android picker** — custom `gpx` filter is unsupported (no MIME) and threw;
+  use `FileType.any` on mobile + read by path; `.gpx` accept-hint stays on web.
+- **`orion.data.clearTracks()`** + `scripts/mobile/cleartracks.sh` — wipe all
+  tracks (dev/data op via the bus).
+
+#### Verification
+1. ✅ `flutter analyze` clean; web build + Android debug APK build both succeed.
+2. ✅ Android: import (15-track file & 15 files) — no freeze, badge shows total.
+3. Web: confirm the Web Worker keeps the page smooth during import (no jank).
+4. ✅ Picker shows/selects `.gpx` (they were under DocumentsUI "Recent"; browse to the folder).
+5. Round-trip export re-imports equivalently (web + Android). *(pending)*
