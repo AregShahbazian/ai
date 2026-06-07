@@ -21,7 +21,7 @@ The MVP is local-only (no account/backend). The **only** DevOps piece the MVP
 needs is the **edge**: Caddy serving the Flutter web build over HTTPS (plus the
 existing GitHub Actions static deploy). Everything else in this epic — API, DB,
 containers, staging, gated prod releases — is **post-MVP** and tracked here, not in
-a phase. See [`phase-12/prd.md`](phase-12/prd.md) for the MVP-scoped slice.
+a phase. See [`mvp/phase-12/prd.md`](mvp/phase-12/prd.md) for the MVP-scoped slice.
 
 ## Locked direction (summary)
 

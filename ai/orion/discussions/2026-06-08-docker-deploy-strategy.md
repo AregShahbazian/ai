@@ -75,7 +75,7 @@ the user understands the moving parts before committing.
 ## Ideas to realize
 
 - **Adopt Docker for the Phase 12 backend** (driven by reproducible-cross-machine
-  deploys + staging DB needs). Update `phase-12/stack.md` to reflect a
+  deploys + staging DB needs). Update `mvp/phase-12/stack.md` to reflect a
   containerized deploy as the chosen direction.
 - **Multi-stage Dockerfile** for the Dart `shelf` API: SDK build stage → minimal
   runtime image (target ~20–80 MB compiled-exe).

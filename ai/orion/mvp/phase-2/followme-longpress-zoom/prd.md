@@ -15,7 +15,7 @@ motion — so the user doesn't have to tap-to-follow and then pinch-zoom in.
 ## Background
 
 Today the FAB only handles a **tap**, which cycles Off → Follow → Follow+Heading
-→ Off (see `phase-2/follow-me`). Follow centers the camera on the user but keeps
+→ Off (see `mvp/phase-2/follow-me`). Follow centers the camera on the user but keeps
 **whatever zoom is current** — and the app opens at a whole-world view
 (`zoom: 1`). So enabling follow from a fresh launch leaves the user as a dot in a
 world map; they must zoom in by hand. Long-press fixes that in one gesture.

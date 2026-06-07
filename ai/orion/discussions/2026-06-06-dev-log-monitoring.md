@@ -20,7 +20,7 @@ split — web → `console.log({tag: data})`, native → `dart:developer.log(jso
 name: tag)`. Every line tagged `orion` + optional feature scope (`orion.map`).
 `avoid_print` elevated to an analyzer **error** to force all logging through the
 path. Implemented same day on branch `feature/p2-dev-logging`; docs in
-`phase-2/dev-logging/`.
+`mvp/phase-2/dev-logging/`.
 
 ## Conclusions
 

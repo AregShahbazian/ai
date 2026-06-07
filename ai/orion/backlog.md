@@ -18,7 +18,7 @@ up; check them off (`[x]`) or remove them once shipped.
 - [ ] Bottom navbar on all non-map pages  <!-- 2026-06-07 -->
       Once on settings/tracks/etc., a bottom navbar makes moving between pages easier. Not shown on the map page.
 - [x] Long-press followme icon (OFF/FOLLOW modes) also zooms to default level  <!-- 2026-06-07 -->
-      Implemented & verified on device → `phase-2/followme-longpress-zoom/` (`id: phase-2-followme-zoom`), branch `feature/followme-longpress-zoom`.
+      Implemented & verified on device → `mvp/phase-2/followme-longpress-zoom/` (`id: phase-2-followme-zoom`), branch `feature/followme-longpress-zoom`.
       Mobile. Long-press in OFF or FOLLOW mode should let the default center-me action (scroll to user, rotate/pan) play out, then zoom to the app-load default zoom level — one fluent animation. In FOLLOW+HEADING mode, long-press is just a regular toggle to OFF (no zoom logic).
 - [ ] Make the default zoom level configurable in the settings page  <!-- 2026-06-07 -->
       Expose the default zoom param(s) (e.g. the long-press center-me default, `kDefaultFollowZoom`) as user-adjustable settings rather than a hardcoded constant.

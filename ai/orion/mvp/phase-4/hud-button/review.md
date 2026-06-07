@@ -6,7 +6,7 @@ title: HudButton — review
 ## Round 1: initial implementation (2026-06-07)
 
 Implemented `HudButton` and migrated both existing HUD controls. `flutter
-analyze` (changed files) clean. Settings cog deferred to `phase-5/navigation/`.
+analyze` (changed files) clean. Settings cog deferred to `mvp/phase-5/navigation/`.
 
 ### Files
 - `lib/features/map/hud_button.dart` — new shared widget.

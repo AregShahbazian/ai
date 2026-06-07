@@ -40,6 +40,6 @@
 - **Offline regions (MVP, on device):** use `maplibre_gl`'s proven offline-region download API; test only on phone.
 
 ## Related
-- `~/ai/orion/phase-1/prd.md` — Phase 1 PRD (`phase-1-map`)
+- `~/ai/orion/mvp/phase-1/prd.md` — Phase 1 PRD (`phase-1-map`)
 - `~/ai/orion/mvp.md` — first-release MVP definition
 - `~/ai/orion/discussions/2026-06-04-mvp-expansion-and-phase1.md`

@@ -54,7 +54,7 @@ first.
 ## Dependencies / relationships
 
 - **Lands before the settings cog button** in Phase 5 Navigation so the cog uses
-  it immediately (`phase-5/navigation/`).
+  it immediately (`mvp/phase-5/navigation/`).
 - Touches `lib/features/map/compass_button.dart` and `location_fab.dart`; new
   widget likely `lib/features/map/hud_button.dart`.
 - Visual parity to verify on web + Android (the FAB reskin must not regress the

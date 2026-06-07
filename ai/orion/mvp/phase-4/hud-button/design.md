@@ -54,7 +54,7 @@ class HudButton extends StatelessWidget {
   `HudButton` with `foregroundColor: following ? colorScheme.primary : null`.
   Background becomes white (matching the compass) instead of the FAB theme
   surface — verify the icon stays legible and the follow tint still reads.
-- **Settings cog** — delivered by `phase-5/navigation/`; no-op `onPressed` for
+- **Settings cog** — delivered by `mvp/phase-5/navigation/`; no-op `onPressed` for
   now, just built on `HudButton(Icons.settings)`.
 
 ## Files
