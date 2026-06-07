@@ -17,3 +17,5 @@ up; check them off (`[x]`) or remove them once shipped.
 - [ ] DevOps agent specialized for devops tasks  <!-- 2026-06-06 -->
 - [ ] Bottom navbar on all non-map pages  <!-- 2026-06-07 -->
       Once on settings/tracks/etc., a bottom navbar makes moving between pages easier. Not shown on the map page.
+- [ ] Long-press followme icon (OFF/FOLLOW modes) also zooms to default level  <!-- 2026-06-07 -->
+      Mobile. Long-press in OFF or FOLLOW mode should let the default center-me action (scroll to user, rotate/pan) play out, then zoom to the app-load default zoom level — one fluent animation. In FOLLOW+HEADING mode, long-press is just a regular toggle to OFF (no zoom logic).
