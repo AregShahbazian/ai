@@ -58,7 +58,22 @@ re-renders/repaints. Confirm our impl is at least as efficient. No PRDs yet.
 Record tracks live: new HUD button(s) to start/stop, store tracks **locally**.
 **No account/backend yet.** More details to follow. No PRDs yet.
 
-### Phase 9 — Language support (i18n)
+### Phase 9 — Offline maps
+The MVP **offline map storage** feature (see [`mvp.md`](mvp.md) §4). Download map
+regions for offline use: **rectangle-draw selection** → pick zoom range → download
+with progress + per-region size estimate; show **downloaded regions** vs regions
+**queued / currently downloading**; use downloaded tiles **seamlessly when
+offline**. User interactions mirror the `track` POC (which already bulk-downloads
+OpenFreeMap `liberty` via `downloadOfflineRegion`) and line up with Google Maps /
+Gaia GPS. OpenFreeMap public server for MVP1; self-host PH tiles post-MVP1. No PRDs yet.
+
+### Phase 10 — Offline maps custom shapes
+Extend Phase 9's region selection beyond a plain rectangle to **custom shapes**
+(freeform / polygon draw) so users download only the area they need instead of an
+over-wide bounding box — fewer wasted tiles, smaller downloads. Builds on the
+Phase 9 download/queue/progress pipeline. No PRDs yet.
+
+### Phase 11 — Language support (i18n)
 Localize **as much of the app as possible** — **at least 2 languages** to start
 (**English** + **Tagalog/Filipino**, matching the PH focus; `~/git/track` already
 had `app_en.arb` / `app_tl.arb` to mine). Set up `flutter_localizations` + `intl`
