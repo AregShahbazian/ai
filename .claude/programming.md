@@ -37,6 +37,18 @@ was changed.
 
 - **Never `git push` unless explicitly told to.** Applies to every repo. Commit
   when asked; never push on your own.
+- **Never edit a connected device without asking.** Any write to an attached
+  device (phone, emulator, tablet) — `adb push`/`rm`/`mv`/`install`, pushing
+  files, deleting, installing/uninstalling apps, changing settings — requires
+  explicit permission first. It's outward-facing and hard to reverse. Read-only
+  inspection (e.g. `adb shell` queries to diagnose) is allowed, but say so before
+  poking around a personal device, and prefer asking when in doubt.
+- **Flag unrelated working-tree changes → suggest a worktree.** Whenever the
+  working tree contains changes that look unrelated to the task at hand (e.g. left
+  by me or another agent on a different feature), pause and point it out, then
+  remind me that `git worktree add <path> [-b <branch>]` lets each branch/agent
+  work in its own directory off the same `.git`. Don't entangle the two lines of
+  work in one tree.
 - **Stage new files at creation.** Any file meant to be kept should be staged
   immediately when created — don't leave workflow docs or other intentional files
   in an untracked/unstaged state.
