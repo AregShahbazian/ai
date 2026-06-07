@@ -82,6 +82,14 @@ with ARB message files, **externalize every user-facing string** (the lone
 an optional in-app override, and keep it easy to add more languages later. Built so
 any new feature ships its strings localized from the start. No PRDs yet.
 
+### Phase 12 — DevOps (backend stack)
+Stand up Orion's backend/infra once it needs a real server (accounts, sync, CRUD
+APIs, shared data). **Locked stack** → [`phase-12/stack.md`](phase-12/stack.md):
+**Caddy** edge (HTTPS/TLS + reverse-proxy) → **Dart `shelf`** API on
+`localhost:8080` → **PostgreSQL + PostGIS** (spatial queries), run under
+**systemd** (no Docker), schema via **dbmate**. Purely additive — the existing
+GitHub Actions SSH/rsync deploy + Caddy static serving are untouched. No PRDs yet.
+
 > Note: "Phase 5 — Navigation" is **app-screen navigation**, not GPS routing/A→B
 > routing, which remains out of scope (see [`mvp.md`](mvp.md)).
 
