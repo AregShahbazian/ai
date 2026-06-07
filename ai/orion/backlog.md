@@ -19,3 +19,5 @@ up; check them off (`[x]`) or remove them once shipped.
       Once on settings/tracks/etc., a bottom navbar makes moving between pages easier. Not shown on the map page.
 - [ ] Long-press followme icon (OFF/FOLLOW modes) also zooms to default level  <!-- 2026-06-07 -->
       Mobile. Long-press in OFF or FOLLOW mode should let the default center-me action (scroll to user, rotate/pan) play out, then zoom to the app-load default zoom level — one fluent animation. In FOLLOW+HEADING mode, long-press is just a regular toggle to OFF (no zoom logic).
+- [ ] Folder structures for organizing tracks/routes/etc.  <!-- 2026-06-07 -->
+      Already in `track/` — reference that. Custom user-created folders, plus folders auto-created when importing multiple tracks/routes/others from one file. Some import cases (e.g. multiple files in one upload) may prompt the user to create a folder for them.

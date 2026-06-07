@@ -19,10 +19,10 @@ navigation plumbing**. The map stays alive across navigation (the pillar).
     `push('/settings')`, `nav.screen.open {screen}` → `push(<path>)` via a
     `{screen→path}` map, `nav.screen.close` → `pop()` if `canPop`.
 - **`lib/app/nav_interaction_observer.dart`** — `NavInteractionObserver`
-  (attached via `GoRouter(observers:)`) records **system back** (Android
-  hardware/edge-swipe) as an observed `nav.screen.open/close` on `didPush`/
-  `didPop`. Dispatched navigations call `markDispatched()` first so the observer
-  skips them (the `_programmaticCamera` guard pattern) — no double entries. Web
+  (attached via `GoRouter(observers:)`) is the **single recorder** of navigation:
+  every push/pop (cog, in-app back, Android system back, programmatic) becomes a
+  `nav.screen.open/close` on `didPush`/`didPop`. The open/close commands are
+  registered `record: false` so dispatch doesn't double-log (see Round 1). Web
   browser-back may not surface as `didPop` (declarative rebuild); Android does.
 - **`lib/features/settings/settings_screen.dart`** — opaque `Scaffold`,
   `AppBar("Settings")`, empty body; back button dispatches `nav.screen.close`.
@@ -83,3 +83,44 @@ Manual (device/web) — ✅ verified on web + Android (2026-06-07):
    return to the map.
 10. (Not run) temp debug polyline across navigation — deferred; covered when real
     map data lands (Phase 7).
+
+## Round 1: code review — single-recorder refactor (2026-06-07)
+
+High-effort multi-agent review of the nav diff. Headline finding addressed here;
+the rest are triaged below.
+
+### Fix: drop the `_fromDispatch` flag → observer is the single recorder
+**Root cause:** the observer skipped dispatched navigations via a shared boolean
+(`markDispatched()`/`_fromDispatch`) set synchronously before an *async*
+`push`/`pop`. A system back landing in that window consumed the wrong flag →
+swapped/dropped log entries (race). It also couldn't stop phantom records
+(dispatch logs *before* the handler runs, so a no-op `close` or unknown-screen
+`open` still logged).
+**Fix:** the `NavigatorObserver` now records **all** push/pop; the
+`nav.screen.open/close` commands are registered `record: false` so dispatch
+executes them without logging (the observer logs the resulting push/pop). No
+shared timing state → no race, no double entry, no phantom records. The cog still
+logs `hud.settings.tap`, and now also yields a `nav.screen.open` via the observer
+— so cog vs console vs system back are consistent.
+**Files:** `lib/core/interaction/interaction_controller.dart` (`register(...,
+record:)` + `_externallyRecorded`), `lib/app/nav_interaction_observer.dart`
+(flag removed), `lib/app/router.dart` (`record: false`, no `markDispatched`).
+**Test:** added `record:false runs the handler but does not log` to
+`test/interaction_controller_test.dart` (7/7 pass). `flutter analyze` clean.
+
+### Verification
+1. ✅ `flutter analyze` clean; interaction tests 7/7.
+2. Re-verify on device: cog/back/system-back each produce exactly one
+   `nav.screen.close`/`open` in `orion.dump()` (no dup, no phantom).
+
+### Triaged for follow-up (not in this round)
+- **#8 (next):** push-based screens aren't URL-addressable (web refresh/share/
+  browser-back). Architectural — to be discussed.
+- Web HUD `Column` gap not wrapped in `PointerInterceptor` (tap-leak).
+- `orion.webnav.to('/settings')` (path) fails name lookup; `to('/')` magic value.
+- `navState()` can throw if called before first route resolves (both bridges).
+- Scalability: adding a screen needs `_screenPaths` + `GoRoute` + id; `settingsTap`
+  hardcodes `/settings` (could `pushNamed`/delegate to `navScreenOpen`).
+- Duplication: `navState` shape across web/io bridges; `navto.sh`/`webnav.sh` vs
+  `orion.sh`; `webnav.to` re-implements `dispatch`.
+- Stale `ShellRoute` mention in `interaction_ids.dart` doc comment.

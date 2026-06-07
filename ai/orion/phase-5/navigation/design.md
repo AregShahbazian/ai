@@ -132,21 +132,27 @@ All three go through `InteractionController.dispatch` so navigation is
 button dispatches `hud.settings.tap` instead of calling `router.push` inline (no
 inline-handler bypass — see README interactions rule).
 
-### Capturing system back (the observe half)
+### Recording navigation — the observer is the single source of truth
 
-Dispatch covers what the UI/automation *initiates*, but **Android hardware /
-edge-swipe back** is popped by go_router directly — it never reaches the bus. So,
-like native map gestures, it's captured with the **observe half**: a
-`NavigatorObserver` (`lib/app/nav_interaction_observer.dart`, attached via
-`GoRouter(observers:)`) calls `interactions.observe(nav.screen.open/close)` on
-`didPush`/`didPop`.
+A `NavigatorObserver` (`lib/app/nav_interaction_observer.dart`, attached via
+`GoRouter(observers:)`) records **every** push/pop as `nav.screen.open/close` on
+`didPush`/`didPop` — no matter the trigger: the cog, the in-app back button,
+**Android system back**, or a programmatic dispatch. One recorder, so the log is
+complete and consistent by construction.
 
-To avoid double-recording the *dispatched* navigations (whose dispatch already
-logged them), each dispatch handler calls `observer.markDispatched()` right before
-it navigates; the observer consumes that flag and skips the matching push/pop —
-the exact `_programmaticCamera` guard pattern. Net result: the cog tap is logged
-as `hud.settings.tap`, the in-app back / console close as `nav.screen.close`, and
-**system back as an observed `nav.screen.close`** — each once.
+To avoid a *second* entry when navigation is dispatched through the bus, the
+`nav.screen.open/close` commands are registered **`record: false`**
+(`InteractionController.register(..., record: false)`): dispatching them executes
+the navigation but doesn't log at the dispatch site — the observer logs the
+resulting push/pop instead. (The cog still records its own `hud.settings.tap`.)
+
+This replaced an earlier `markDispatched()`/`_fromDispatch` flag that the observer
+consumed to skip dispatched navigations: a shared boolean set synchronously before
+an *async* push/pop, so a system back in that window mis-attributed the log
+(race). The `record: false` approach has no shared timing state — there is exactly
+one recording site, so no race and no double entry. It also removes the phantom
+records the flag couldn't prevent (a no-op `close` or an unknown-screen `open` no
+longer logs, since dispatch doesn't record these at all).
 
 (Limitation: on web, browser back/forward is a declarative route rebuild and may
 not surface as `didPop`; Android hardware back does.)
