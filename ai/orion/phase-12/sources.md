@@ -17,3 +17,20 @@ See [`stack.md`](stack.md) for the locked stack itself.
   containers (separate volume), one Caddy routes prod vs staging by hostname
   (~5 containers same-box), start same-box and split to a second box later if it
   risks prod.
+- [`../discussions/2026-06-08-api-deploy-downtime-scaling.md`](../discussions/2026-06-08-api-deploy-downtime-scaling.md)
+  — same-day follow-on on **API release mechanics**: API container is recreated
+  from the new image per deploy (DB is not — schema via migrations on a persistent
+  volume); the ~1–2 s recreate gap is closed by blue-green/healthcheck on one box,
+  and at scale by stateless API + multiple replicas behind Caddy as load balancer.
+- [`../discussions/2026-06-08-feature-staging-deploys.md`](../discussions/2026-06-08-feature-staging-deploys.md)
+  — same-day follow-on on **per-feature staging deploys**: per-feature staging URLs
+  are **frontend-only** (Caddy `?version=<branch>`, reusing the `/web/<name>/`
+  preview mechanism — no extra containers); the backend has just **two
+  environments** (prod + staging), and backend changes are tested **serially** on
+  the shared staging API before promotion to prod.
+- [`../discussions/2026-06-08-prod-tag-release-gate.md`](../discussions/2026-06-08-prod-tag-release-gate.md)
+  — same-day follow-on, **decision** to adopt **tag-to-release with a manual gate**:
+  `main` auto-deploys to staging; a version tag triggers automated build/image/
+  push/tests up to a **manual approval gate** (GitHub Actions "Environments" +
+  required reviewers, approved in the repo UI), after which prod deploy
+  (pull → migrate → swap → healthcheck) is automated.
