@@ -11,13 +11,13 @@ App shell stood up with off-the-shelf `go_router` (17.3.0) — **no custom
 navigation plumbing**. The map stays alive across navigation (the pillar).
 
 ### What landed
-- **`lib/app/router.dart`** — `appRouter`: **plain stacked routes**, no
-  `ShellRoute`. `/` → `MapScreen` (home), `/settings` → `SettingsScreen` pushed
-  over it. `Navigator` keeps the home route alive (`maintainState`) beneath the
-  pushed page, so the map is never disposed/reloaded.
+- **`lib/app/router.dart`** — `appRouter`: `settings` is a **child route of `/`**
+  (the map); `goNamed('settings')` builds `[MapScreen, SettingsScreen]` so the
+  parent map stays mounted/alive and the URL is `/settings` (see Round 2; an
+  earlier cut used sibling routes + `push`).
   - `registerNavInteractions(appRouter)` wires `hud.settings.tap` →
-    `push('/settings')`, `nav.screen.open {screen}` → `push(<path>)` via a
-    `{screen→path}` map, `nav.screen.close` → `pop()` if `canPop`.
+    `goNamed('settings')`, `nav.screen.open {screen}` → `goNamed(screen)`,
+    `nav.screen.close` → `pop()` if `canPop`.
 - **`lib/app/nav_interaction_observer.dart`** — `NavInteractionObserver`
   (attached via `GoRouter(observers:)`) is the **single recorder** of navigation:
   every push/pop (cog, in-app back, Android system back, programmatic) becomes a
@@ -45,10 +45,10 @@ navigation plumbing**. The map stays alive across navigation (the pillar).
   `Navigator` `child` swallowed all map/HUD touches, which froze interaction on
   the first build). `ShellRoute` is meant for shared chrome (its `child` is the
   page body), not a backdrop overlay — so this was the wrong tool.
-- **Refactored to plain stacked routes + `push`** (current). The map is the home
-  route; screens push over it; `Navigator` keeps it alive beneath. No `Stack`, no
-  transparent route, no `IgnorePointer`. Simpler and idiomatic; same map-alive
-  guarantee. See `design.md` "Plain stacked routes + `push` — chosen".
+- **Refactored to plain stacked routes + `push`** (later superseded by Round 2's
+  nested child routes + `goNamed`). The map was the home route; screens pushed
+  over it; `Navigator` kept it alive beneath. No `Stack`/`IgnorePointer`. See
+  `design.md` "Nested child routes + `go`/`goNamed` — chosen".
 - **No `MapScreen` split** — it already *is* the map + HUD; it's just the home
   route now.
 - **Open handlers fire-and-forget the `push`.** `router.push()`'s Future only
@@ -123,4 +123,34 @@ record:)` + `_externallyRecorded`), `lib/app/nav_interaction_observer.dart`
   hardcodes `/settings` (could `pushNamed`/delegate to `navScreenOpen`).
 - Duplication: `navState` shape across web/io bridges; `navto.sh`/`webnav.sh` vs
   `orion.sh`; `webnav.to` re-implements `dispatch`.
+- Stale `ShellRoute` mention in `interaction_ids.dart` doc comment.
+
+## Round 2: #8 — URL-addressable screens (2026-06-07)
+
+**Change:** screens are now **child routes of `/`** and navigation uses
+`goNamed`/`pop` (was sibling routes + imperative `push`). go_router matches `/`
+**and** the child, so the stack is `[MapScreen, screen]` — the map (parent route)
+stays mounted/alive beneath, **and** the URL reflects the screen.
+
+**Fixes:**
+- Web URL now tracks the screen → refresh/share and browser back/forward work
+  (the #8 gap).
+- Deep-link to `/settings` builds `[map, settings]`, so `canPop()` is true and
+  back always works — removes the earlier "back-trap if reached via go/deeplink".
+- Dropped `_screenPaths` (screen key == route `name` via `goNamed`) and the
+  `unawaited`/`push`-Future hang workaround (`go`/`pop` return void).
+
+**Verified on web + Android (2026-06-07):** map stays alive across open/close (no
+remount/reload, instant, camera unchanged); URL shows `/settings` on web with
+working browser-back and refresh-on-`/settings`; `orion.dump()` shows one
+open/close per action. `flutter analyze` clean; interaction tests 7/7.
+
+**Files:** `lib/app/router.dart`.
+
+### Still triaged for the cleanup pass
+- Web HUD `Column` gap not wrapped in `PointerInterceptor` (tap-leak).
+- `orion.webnav.to('/settings')` (path) vs name; `to('/')` magic value.
+- `navState()` can throw if called before first route resolves (both bridges).
+- Duplication: `navState` shape (web/io); `navto.sh`/`webnav.sh` vs `orion.sh`;
+  `webnav.to` re-implements `dispatch`.
 - Stale `ShellRoute` mention in `interaction_ids.dart` doc comment.

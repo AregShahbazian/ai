@@ -40,21 +40,24 @@ tracks/routes tab group) whose widget state we want preserved — but even there
 our no-refetch guarantee comes from long-lived controllers (below), so it's
 optional, not load-bearing.
 
-### Plain stacked routes + `push` — chosen
+### Nested child routes + `go`/`goNamed` — chosen
 
-The map is the **home route**; screens are `push`ed **over** it. Flutter's
-`Navigator` keeps the route beneath a pushed page alive (`maintainState` defaults
-to true), so the map — controller, camera, follow mode, future layers — is never
-disposed or reloaded while a screen is open. Popping returns to the exact same
-live map. No `Stack`, no overlay juggling, no custom plumbing.
+The map is the `/` route; **screens are its child routes**. Navigating to one
+(`goNamed('settings')` → URL `/settings`) makes go_router match `/` **and**
+`settings`, building the Navigator stack `[MapScreen, SettingsScreen]` — so the
+map (the **parent** route) stays matched and mounted beneath the screen, never
+disposed or reloaded, **and** the URL reflects the screen (deep-linkable,
+refresh-safe, browser-back correct). Popping returns to the same live map. No
+`Stack`, no overlay juggling, no custom plumbing.
 
 ```
 GoRouter(
   initialLocation: '/',
   routes: [
-    GoRoute(path: '/',         builder: (_, __) => const MapScreen()),     // home: the map
-    GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()), // pushed over it
-    // later: /tracks, /routes …
+    GoRoute(path: '/', name: 'map', builder: (_, __) => const MapScreen(), routes: [
+      GoRoute(path: 'settings', name: 'settings', builder: (_, __) => const SettingsScreen()),
+      // later: tracks, routes … (children of '/' keep the map alive)
+    ]),
   ],
 )
 ```
@@ -63,30 +66,35 @@ Why this and **not `ShellRoute`** (rejected): `ShellRoute` is built for *shared
 chrome* — its `child` is meant to **be** the page body, with persistent UI (a nav
 bar / drawer) wrapped around it. Using it to hold the map as a *backdrop* under an
 always-present `child` overlay is off-label: it forces a transparent home route
-(so the map shows through `child`) **and** an `IgnorePointer` (so taps reach the
-map under `child`). That machinery is a smell — the wrong tool for "persistent
-backdrop." Plain stacked routes give the same map-alive guarantee with none of it.
+and an `IgnorePointer` (the smell we removed in an earlier cut). Nested child
+routes give the map-alive guarantee idiomatically.
 
 Why it fits:
-- The map is created **once** (home route) and stays mounted beneath every pushed
+- The map (parent route) is created **once** and stays mounted beneath every child
   screen — controller/camera/layers preserved. Returning is instant: no remount,
-  no reload, no re-fit.
-- Pure go_router configuration; standard `push`/`pop`.
+  no reload, no re-fit. (`goNamed` reuses the parent page via its stable key.)
+- **URL-addressable**: the address bar tracks the screen, so web refresh/share and
+  browser back/forward work — production-grade for web, free on Android.
+- Deep-linking straight to `/settings` builds `[map, settings]`, so the parent is
+  always present and `canPop()` is true — back always works (no "trap").
+- Pure go_router configuration; standard `goNamed`/`pop`.
 
-Trade-off accepted: an opaque pushed screen leaves the map **offstage** (kept
-alive, but not painted) — fine here, since Settings is opaque and you don't see
-the map behind it anyway. If we later want the map **visible behind a translucent
-panel** (Gaia-style), that's a *different* need met with a deliberate persistent
-`Stack` or a bottom sheet (`showModalBottomSheet` floats over the home body with
-no `IgnorePointer`) — still not `ShellRoute`.
+(History: an earlier cut used sibling routes + imperative `push` — map alive via
+`maintainState`, but the URL never updated, so web refresh/share/back broke. The
+nested-child form fixes that with no loss of the keep-alive guarantee.)
+
+Trade-off: an opaque child screen leaves the map **offstage** (kept alive, not
+painted) — fine here, since Settings is opaque. A map **visible behind a
+translucent panel** (Gaia-style) is a different need, met later with a deliberate
+persistent `Stack` / bottom sheet — still not `ShellRoute`.
 
 ## How the pillars map to mechanism
 
 | Pillar (README "Persistent state, transient screens") | Realized by |
 |---|---|
-| Map never unmounts/reloads | Map is the home route; pushed screens sit above it, `Navigator` keeps it alive (`maintainState`) |
+| Map never unmounts/reloads | Map is the `/` parent route; child screens stack above it, the parent stays matched/mounted |
 | Data pages don't re-fetch on mount (unless first time) | **Long-lived controllers**, not widget keep-alive — pages observe a `ChangeNotifier` that fetched once; covered when data pages land (Phase 6+), not this phase |
-| Tearing the map down for a page = explicit opt-out | A future destination uses `go`/`pushReplacement` (replaces the stack, disposing the map) instead of `push` — an explicit per-call choice |
+| Tearing the map down for a page = explicit opt-out | A future destination is a **top-level** route (not a child of `/`), so the map isn't matched and is disposed — an explicit, structural choice |
 
 ## App wiring changes
 
@@ -94,7 +102,7 @@ no `IgnorePointer`) — still not `ShellRoute`.
 - `app.dart`: `MaterialApp(home: MapScreen())` → `MaterialApp.router(routerConfig: appRouter)`.
 - New `lib/app/router.dart`: the `GoRouter` (routes above) + `registerNavInteractions`.
 - **No `MapScreen` split** — `MapScreen` already *is* the map + HUD; it's just the
-  home route now. State/controller logic unchanged.
+  `/` route now. State/controller logic unchanged.
   - Verify `onMapCreated` / `onStyleLoaded` fire **once** across navigations
     (controller identity stable) — the concrete proof of the pillar.
 
@@ -103,28 +111,27 @@ no `IgnorePointer`) — still not `ShellRoute`.
 Add to `interaction_ids.dart` (and `all`):
 
 - `hud.settings.tap` → opens the settings destination. Handler:
-  `router.push('/settings')`. No payload.
-- `nav.screen.open` → open a named screen. Payload `{screen: String}` (route
-  key, e.g. `'settings'`). Handler: `router.push(<resolved path>)`.
-- `nav.screen.close` → **pop** the current page (`context.pop()` /
-  `Navigator.maybePop`), returning to whatever's beneath (the live map). No
-  payload.
+  `router.goNamed('settings')`. No payload.
+- `nav.screen.open` → open a named screen. Payload `{screen: String}` = the
+  GoRoute `name` (e.g. `'settings'`). Handler: `router.goNamed(screen)`.
+- `nav.screen.close` → **pop** the current screen (`router.pop()` when
+  `canPop`), returning to whatever's beneath (the live map). No payload.
 
-### Navigation verbs: settled on `push` + back = `nav.screen.close`
+### Navigation verbs: `goNamed` to open, back = `nav.screen.close`
 
-- **Opening a page/modal uses `push`** (never `go`), so every destination is a
-  real entry on the navigator stack.
+- **Opening a screen uses `goNamed`** — because screens are child routes of `/`,
+  this builds `[map, screen]` (URL-addressable) while keeping the parent map
+  alive. The screen key is the route `name`, so there's no separate path table.
 - **Android hardware back, the in-app back/close button, and
-  `nav.screen.close` are the same action — a pop.** Wire the back/close button to
-  dispatch `nav.screen.close`, and let the system back button hit the same pop
-  (go_router's `BackButtonDispatcher` → the root `Navigator`). They must never
-  diverge. Back collapses pages one at a time and only exits the app at `/`.
-- This makes back **intuitive by default** and means **future modals
-  (bottom sheets / dialogs) close on back press** for free, since they're pushed
-  routes too.
-- **`go` / `pushReplacement` are reserved for true replaces only** — flows where
-  erasing a history step is the intent (e.g. a future login → home). They are the
-  exception, called out per use, never the default for opening a screen.
+  `nav.screen.close` are the same action — a pop.** The back/close button
+  dispatches `nav.screen.close`; the system back button hits the same pop
+  (go_router's `BackButtonDispatcher` → root `Navigator`). They must never
+  diverge. Back collapses screens one at a time and only exits the app at `/`.
+- This makes back **intuitive by default**; future modals (bottom sheets /
+  dialogs) close on back press for free as pushed routes.
+- **`pushReplacement` / a top-level (non-child) route are reserved for true
+  replaces / map-teardown** — flows that intentionally erase history or drop the
+  map. The exception, called out per use, never the default.
 
 All three go through `InteractionController.dispatch` so navigation is
 **programmatically drivable** from the web `window.orion` bridge and native
