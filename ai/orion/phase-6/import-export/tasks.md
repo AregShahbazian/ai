@@ -53,13 +53,16 @@ parser, stand up Drift, wire through the existing `InteractionController` /
 ## 7. Interaction taxonomy (Phase 3, both ways)
 - [ ] Add `hud.tracks.tap`, `tracks.import.start`, `tracks.open` (`{id}`),
       `tracks.export` (`{id}`) to `interaction_ids.dart` + `all`, with doc comments.
-- [ ] `registerTracksInteractions(...)` in `main` (app-lifetime): push `/tracks`,
-      run import, push `/tracks/$id`, export. All via `dispatch` — drivable from
-      the bridges.
+- [ ] `registerTracksInteractions(...)` in `main` (app-lifetime): `goNamed('tracks')`,
+      run import, `goNamed('trackDetail', pathParameters:{'id':id})`, export. All
+      via `dispatch` — drivable from the bridges. (Trigger ids record by default;
+      no `record:false` — that's only for `nav.screen.*`.)
 
 ## 8. Routes + HUD entry
-- [ ] `router.dart`: add `/tracks` → `TracksScreen`, `/tracks/:id` →
-      `TrackDetailScreen`; add `'tracks':'/tracks'` to `_screenPaths`.
+- [ ] `router.dart`: add `tracks` (name `'tracks'`) and its child `:id` (name
+      `'trackDetail'`) as **nested children of `/`** → `TracksScreen` /
+      `TrackDetailScreen`. No `_screenPaths` (removed; `goNamed` resolves by name,
+      so `nav.screen.open {screen:'tracks'}` works for free).
 - [ ] `map_screen.dart`: add a Tracks `HudButton` (`Icons.route`) in the
       bottom-right column **between the follow-me FAB and the settings cog**;
       `onPressed` → `dispatch(hud.tracks.tap)`. Web attribution clearance stays on

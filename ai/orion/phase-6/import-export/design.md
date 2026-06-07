@@ -20,7 +20,7 @@ off-the-shelf or ported, not invented:
 | XML | **`package:xml`** (already what `track/` used). |
 | Export delivery | **`share_plus`** on mobile (share sheet) + browser-download on web via `package:web` — behind a conditional-import `TrackExporter` (mirrors the existing `console_bridge_io/web`, `log/console_io/web` split). |
 | HUD button | **Phase 4 `HudButton`** (reuse). |
-| Navigation | **Phase 5 `go_router`** `push` (reuse). |
+| Navigation | **Phase 5 `go_router`** — screens as **nested child routes of `/`**, navigated via **`goNamed`** (reuse; the map is the parent route, stays matched + alive beneath; URLs deep-linkable / refresh-safe). |
 | Both-ways wiring | **Phase 3 `InteractionController`** (reuse). |
 
 Nothing here re-implements a parser library, a DB, a router, or a state container.
@@ -121,11 +121,22 @@ Single-track only for now; **batch select / export deferred** (PRD).
 
 ## Navigation & HUD entry
 
-- New route `GoRoute('/tracks')` → `TracksScreen`; `GoRoute('/tracks/:id')` →
-  `TrackDetailScreen` (reads `state.pathParameters['id']`). Both `push` over the
-  live map (Phase 5 pillar — map stays alive beneath).
-- Add `'tracks': '/tracks'` to `router.dart`'s `_screenPaths` so
-  `nav.screen.open {screen:'tracks'}` works too.
+- **Routes as nested children of `/`** (so the map parent stays matched + mounted
+  — the Phase 5 pillar, now realized via child routes rather than `push`):
+  ```
+  GoRoute('/', name:'map', routes:[
+    GoRoute('settings', name:'settings'),          // existing
+    GoRoute('tracks',   name:'tracks',  routes:[   // new — list
+      GoRoute(':id',    name:'trackDetail'),       // new — detail
+    ]),
+  ])
+  ```
+  `/tracks/:id` matches the whole chain → stack `[Map, Tracks, Detail]`, so back
+  from detail → list → map. `TrackDetailScreen` reads `state.pathParameters['id']`.
+  Both URLs are deep-linkable / refresh-safe.
+- **No `_screenPaths` map** — that was removed when nav moved to `goNamed`
+  (the screen key **is** the `GoRoute` name). So `nav.screen.open {screen:'tracks'}`
+  works for free once the route is named `'tracks'`; nothing to register.
 - **HUD:** add a **Tracks `HudButton`** to the bottom-right column in
   `map_screen.dart`, **between the follow-me FAB and the settings cog**
   (top→bottom: `LocationFab`, **Tracks**, settings). Icon: `Icons.route`
@@ -139,14 +150,22 @@ Add to `interaction_ids.dart` + `all`:
 
 | id | payload | handler |
 |---|---|---|
-| `hud.tracks.tap` | — | `router.push('/tracks')` |
+| `hud.tracks.tap` | — | `router.goNamed('tracks')` |
 | `tracks.import.start` | — | `ImportController.run()` (picker→parse→store) |
-| `tracks.open` | `{id}` | `router.push('/tracks/$id')` |
+| `tracks.open` | `{id}` | `router.goNamed('trackDetail', pathParameters: {'id': id})` |
 | `tracks.export` | `{id}` | `repository.getTrack` → `GpxWriter` → `TrackExporter` |
 
+These are **trigger** ids and **record by default** — the same split Phase 5 uses
+for the cog: `hud.settings.tap` records itself *and* the `NavInteractionObserver`
+separately records the resulting `nav.screen.open`. So `hud.tracks.tap` /
+`tracks.open` each log their trigger, and the observer logs the screen open on the
+push it causes (no `record: false` here — that flag is only for `nav.screen.*`,
+which would otherwise double-log against the observer).
+
 Wiring (`registerTracksInteractions(...)`, called in `main`, app-lifetime, like
-`registerNavInteractions`): `hud.tracks.tap` records and pushes; the others run
-their service. All four go through `InteractionController.dispatch`, so the whole
+`registerNavInteractions`): the nav ids `goNamed`, the others run their service.
+`goNamed`/`pop` return void, so handlers don't await (unlike `push`). All four go
+through `InteractionController.dispatch`, so the whole
 feature is **drivable from the bridges** (`orion.dispatch('tracks.export',{id})`,
 etc.) — both-ways per the README interactions rule and `[[interaction-controller-convention]]`.
 
