@@ -154,3 +154,23 @@ open/close per action. `flutter analyze` clean; interaction tests 7/7.
 - Duplication: `navState` shape (web/io); `navto.sh`/`webnav.sh` vs `orion.sh`;
   `webnav.to` re-implements `dispatch`.
 - Stale `ShellRoute` mention in `interaction_ids.dart` doc comment.
+
+## Round 3: cleanup pass (2026-06-07)
+
+Knocked out the remaining triaged findings:
+1. **Web HUD tap-leak** — wrapped the whole bottom-right `Column` in one
+   `PointerInterceptor` (was per-button), so taps on the gap no longer leak to the
+   map. (`map_screen.dart`)
+2. **`orion.webnav.to()`** — now accepts the path (`/settings`, as `dump()`
+   reports) or the name (`settings`); added `orion.webnav.back()` and dropped the
+   `'/'` magic value. (`console_bridge_web.dart`)
+3. **`navState()` guard** — added `routerNavState()` that returns nulls (not a
+   throw) when called before the first route resolves. (`router.dart`)
+4. **De-dup** — both bridges now call the shared `routerNavState()` (web spreads
+   the browser-URL fields on top); `webnav.to/back` reuse a `dispatchProgrammatic`
+   helper; `navto.sh`/`webnav.sh` delegate to `orion.sh` instead of re-running the
+   `dart run tool/orion_remote.dart` plumbing.
+5. **Stale doc** — fixed the `ShellRoute` mention in `interaction_ids.dart`.
+
+`flutter analyze` clean; interaction tests 7/7; scripts `bash -n` clean.
+All Round-1/2/3 review findings now resolved.

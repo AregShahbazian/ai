@@ -42,7 +42,8 @@ flutter run                         # debug build on the device
 await orion.dispatch('hud.followMe.tap')
 orion.logEvents(true); orion.dump(); orion.ids
 orion.webnav.dump()                            # router location vs browser URL, canPop, stack depth
-await orion.webnav.to('settings')              # navigate to a screen ('/' = back to map)
+await orion.webnav.to('settings')              # open a screen (name or '/settings' path)
+await orion.webnav.back()                      # close the current screen (back to map)
 
 # Mobile — from the laptop, against a running ./scripts/mobile/run.sh (debug/profile):
 ./scripts/mobile/orion.sh dump                 # → captured interaction buffer
