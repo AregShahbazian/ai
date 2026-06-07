@@ -79,7 +79,7 @@ Also `dependency_overrides: path_provider_foundation: 2.4.1` to drop `objective_
 
 ### Manual — Android (`flutter run -d <device>`)
 14. Same import flow; picker multi-select; badge; list updates.
-15. Export → **share sheet** appears with the `.gpx`.
+15. Export → **native save-as dialog** (save to Downloads/Files). *(was a share sheet — see Round 2)*
 16. Android hardware back collapses detail → list → map (intuitive).
 17. Persistence: kill + relaunch → imported tracks still listed (Drift on device).
 
@@ -120,3 +120,37 @@ Device/web testing surfaced import jank. Fixes (branch `feature/p6-import-export
 3. Web: confirm the Web Worker keeps the page smooth during import (no jank).
 4. ✅ Picker shows/selects `.gpx` (they were under DocumentsUI "Recent"; browse to the folder).
 5. Round-trip export re-imports equivalently (web + Android). *(pending)*
+
+### Round 2: post-merge review follow-ups + export UX (2026-06-08)
+
+A high-effort code review of the merged feature plus device UX feedback. Fixes on
+`main` (commit `ff7509a`):
+
+- **DB index** — `track_points(track_id, seq)` added via schema **v2** migration
+  (`onCreate` + `onUpgrade`). SQLite doesn't index FK child columns, so
+  `getPoints`/cascade-delete were full-scanning the whole points table — wouldn't
+  scale to many tracks × many points.
+- **Route guard** — `trackDetail` `:id` now `int.tryParse` → redirect to `/tracks`
+  on a malformed (user-addressable) URL, instead of crashing in `int.parse`.
+- **Import hardening** — single-flight guard on `ImportController.run()`
+  (re-entrant runs shared the one parse worker + the `_pending` badge → file
+  mix-up); try/catch around the off-thread parse (worker spawn / parse failure →
+  friendly message, not an unhandled throw); **64 MB per-file cap** (abuse/OOM
+  guard before the file → string → DOM → list → worker-copy blow-up).
+- **Export → save to device** — replaced the share sheet (`share_plus`) with the
+  **native save-as dialog** (`file_picker` `saveFile`): mobile writes the bytes at
+  the chosen location (Downloads/Files), desktop writes the returned path.
+  `share_plus` / `path_provider` now unused. *(Device feedback: the share sheet
+  listed apps but offered no save-to-device.)* Supersedes Round 1's
+  `Share.shareXFiles`.
+- **Import icon** → `Icons.file_download` (was `file_upload`); export keeps
+  `file_upload`.
+- **Won't-fix** — the import picker (Android SAF) has no close button and back
+  walks up folders before dismissing; that's OS chrome — accepted as the default
+  (only fix would be a custom in-app browser). See `backlog.md`.
+
+#### Verification
+1. ✅ `flutter analyze` clean across all touched files.
+2. Export on Android → save-as dialog → file lands in Downloads; re-import is
+   equivalent. *(pending device retest)*
+3. `/tracks/abc` (typed/deep-link) → redirects to the list, no crash. *(pending)*

@@ -100,3 +100,10 @@ zoom."
 3. ✅ **Follow → long-press:** → Follow+Heading, zoom 15.
 4. ✅ **Follow+Heading → long-press:** → Off, north-up, no zoom.
 5. ✅ Tap cycle unchanged; follow kept after the zoom; manual pan still drops to Off.
+
+### Round 2: re-entrancy guard (2026-06-08)
+
+Code-review follow-up (commit `ff7509a`): `onFabLongPressed` now has a
+**single-flight guard** (`_longPressBusy`). A second long-press during the in-flight
+zoom would overwrite `_idleCompleter` and race two camera animations (the zoom
+stops short); the second press is now dropped (returns `cycled`, no side effect).

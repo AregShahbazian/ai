@@ -26,6 +26,8 @@ up; check them off (`[x]`) or remove them once shipped.
       Already in `track/` — reference that. Custom user-created folders, plus folders auto-created when importing multiple tracks/routes/others from one file. Some import cases (e.g. multiple files in one upload) may prompt the user to create a folder for them.
 - [ ] Show HUD button name on hover (web)  <!-- 2026-06-08 -->
       Hovering over a HUD button shows its name in the bottom-right, next to the (i) icon.
+- [ ] Settings use custom icons that look like the real HUD icons  <!-- 2026-06-08 -->
+      Each setting's description uses a custom icon resembling the actual HUD icon it refers to.
 
 ## Tracks import/export — native UX gaps (2026-06-08)
 - Import file picker (Android SAF): no close button; back walks up folders before dismissing. WON'T FIX — OS chrome; only fix is a custom in-app browser. Accepted as OS default.
