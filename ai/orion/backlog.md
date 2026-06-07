@@ -24,3 +24,9 @@ up; check them off (`[x]`) or remove them once shipped.
       Expose the default zoom param(s) (e.g. the long-press center-me default, `kDefaultFollowZoom`) as user-adjustable settings rather than a hardcoded constant.
 - [ ] Folder structures for organizing tracks/routes/etc.  <!-- 2026-06-07 -->
       Already in `track/` — reference that. Custom user-created folders, plus folders auto-created when importing multiple tracks/routes/others from one file. Some import cases (e.g. multiple files in one upload) may prompt the user to create a folder for them.
+- [ ] Show HUD button name on hover (web)  <!-- 2026-06-08 -->
+      Hovering over a HUD button shows its name in the bottom-right, next to the (i) icon.
+
+## Tracks import/export — native UX gaps (2026-06-08)
+- Import file picker (Android SAF): no close button; back walks up folders before dismissing. WON'T FIX — OS chrome; only fix is a custom in-app browser. Accepted as OS default.
+- ~~Export share sheet had no save-to-device~~ DONE: export now uses native save-as dialog (file_picker `saveFile`), replacing share_plus.
