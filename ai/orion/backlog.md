@@ -28,6 +28,9 @@ up; check them off (`[x]`) or remove them once shipped.
       Hovering over a HUD button shows its name in the bottom-right, next to the (i) icon.
 - [ ] Settings use custom icons that look like the real HUD icons  <!-- 2026-06-08 -->
       Each setting's description uses a custom icon resembling the actual HUD icon it refers to.
+- [ ] Share downloaded maps device-to-device (offline mesh)  <!-- 2026-06-08 -->
+      1-server/multiple-clients model: one device shares a downloaded map with nearby devices over the same WiFi network or Bluetooth (whichever fits / is fastest). Combined with sharing the APK between phones (via Orion or otherwise) and the app being offline-first (works even if never online since install), this lets people bring navigation/maps to remote areas with no signal.
+      Storing downloaded maps as plain files on disk (à la OsmAnd `.obf` / Organic Maps `.mwm`) is part of this — it makes maps portable so they can be copied/shared between devices for the offline-sharing purpose above.
 
 ## Tracks import/export — native UX gaps (2026-06-08)
 - Import file picker (Android SAF): no close button; back walks up folders before dismissing. WON'T FIX — OS chrome; only fix is a custom in-app browser. Accepted as OS default.
