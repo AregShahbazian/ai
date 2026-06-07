@@ -17,9 +17,14 @@ Be concise: one-liners for the work items, a short humanized paragraph for git.
 1. **MVPs** — read `~/ai/<repo>/mvp.md` (and any `mvp*.md`). One line each:
    name + the gist + state (e.g. "spec'd, not built").
 2. **Phases** — each `~/ai/<repo>/phase-*/`. One line each: `Phase N — <title>` +
-   rolled-up status.
+   rolled-up status. **Also include coming/future phases** — any phase defined but
+   not yet started (e.g. listed in `~/ai/<repo>/README.md` or `backlog.md`, or a
+   `phase-*/` dir with no task docs yet). Mark these as "planned / not started"
+   so the user can see what's next.
 3. **Tasks** — each task dir inside a phase. One line each: task name + which docs
-   exist (`prd/design/tasks/review`) + implementation state if known.
+   exist (`prd/design/tasks/review`) + implementation state if known. **List every
+   task of every phase**, including planned tasks of coming phases (even with no
+   docs yet — show `(none)` / planned).
 4. **Git — code repo** (`git -C <repo-root>`):
    - current branch; staged vs unstaged vs untracked (counts/kinds from
      `status --short`); ahead/behind upstream
@@ -55,6 +60,10 @@ If a phase isn't yet tied to a specific MVP, nest it under the MVP it serves (Ph
 1 → MVP1 here). Keep indentation consistent so the containment is obvious.
 
 ## Rules
+- **Show all phases and all tasks** — never trim to just the active ones. Coming
+  phases and their planned tasks always appear too, in the same one-line format, so
+  the overview doubles as a "what's next" roadmap. Order phases ascending so the
+  future ones sit at the bottom.
 - **Humanize git** — translate porcelain into plain English ("3 doc edits staged
   but not committed", "branch `phase-1-map` has 1 commit, not pushed yet"), not raw
   `git status` dumps.
