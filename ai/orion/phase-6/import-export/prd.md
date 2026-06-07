@@ -15,12 +15,19 @@ tracks yet (that's Phase 7).
 - **Each `<trk>` becomes exactly one entry** in our data structure. A single file
   with 15 tracks → **15 entries**. No folders or grouping for now (deferred —
   see backlog).
+- **Reached via a new "Tracks" HUD icon** on the map, placed **above the settings
+  cog, below the follow-me FAB** (reuses the Phase 4 `HudButton`). The settings
+  icon + page stay as-is. Opens the Tracks page (pushes over the live map, per the
+  Phase 5 navigation pattern).
 - Imported tracks get their **own page**, shown as a **flat list** of entries.
-  - List item: a **summary**.
+  - List item: a **summary** — for now: track **name**, **start date**,
+    **distance**, **duration** (+ a small **color** swatch). (Refine later.)
   - **Tapping the item body** opens the **item-detail page** (**full stats**).
-  - **Ellipsis (⋮) at the right** of each item opens a per-item dropdown menu.
-    For now it contains **only "Export"** — this is how you export a single track.
-    Batch select / export is **deferred**.
+  - **Ellipsis (⋮) at the right** of each item opens a per-item dropdown menu via
+    Flutter's built-in **`PopupMenuButton`** (`Icons.more_vert`) — identical on web
+    and mobile (Flutter-rendered, not native), the menu pops anchored to the ⋮
+    button. For now it contains **only "Export"** — this is how you export a single
+    track. Batch select / export is **deferred**.
 - **Import is triggered from an import icon in the page header** (`AppBar`
   `actions`, same row as the page title) → opens the system file picker.
 - **File picker via `file_picker`** — works on **web and mobile**.
@@ -60,10 +67,14 @@ Two real-world shapes of the *same* trip, both must import cleanly:
   `<desc>` wrapped in `CDATA`, sub-second `<time>` (`...:50.154Z`), color in
   `topografix:color`.
 
-### Internal model
+### Internal model & storage
 - **One canonical track model** for both formats. Parse Gaia and MyTracks GPX into
   the same normalized type; flatten format differences (time precision, color
   source, CDATA) at import. Nothing format-specific persists downstream.
+- **Persisted with Drift** (SQLite) — works on **both web (WASM SQLite) and
+  mobile** from one API, matching Orion's web-first dev + mobile runtime. (MVP
+  listed Drift as TBD; this confirms it.) Plain `sqflite` is mobile-only, so not
+  enough on its own.
 
 ### Structure to parse
 - A file may contain **N `<trk>`** → import must handle multi-track files, not
