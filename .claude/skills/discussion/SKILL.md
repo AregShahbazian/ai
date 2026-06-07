@@ -58,6 +58,13 @@ subsequent response until the user explicitly ends it (e.g. "end discussion",
    - **Memory pointer:** for significant decisions, also add/update a `type:
      project` memory file and a one-line pointer in `MEMORY.md`, linking the doc
      path. Link related memories with `[[name]]`.
+   - **One file per discussion session.** Each `/discussion` session ALWAYS gets
+     its own new summary file — never append to or merge into a previous
+     discussion's file, even when the topic is related or it's the same day
+     (disambiguate same-day slugs, e.g. `-part2` or a distinct slug). Only merge
+     into an existing file when the user explicitly says to (e.g. "append to that
+     discussion", "merge into the X doc"). Cross-reference related docs with a
+     link instead of merging.
    - If the discussion was trivial (no substantive content), say so and skip the
      file instead of writing an empty summary.
 

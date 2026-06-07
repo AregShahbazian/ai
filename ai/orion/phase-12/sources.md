@@ -12,3 +12,8 @@ See [`stack.md`](stack.md) for the locked stack itself.
   staging vs prod, switching VPS). **Decision: adopt Docker at Phase 12**, driven
   by reproducible cross-machine deploys + an upcoming staging DB. Its
   "Ideas to realize" section is the concrete build backlog for this phase.
+- [`../discussions/2026-06-08-staging-topology.md`](../discussions/2026-06-08-staging-topology.md)
+  — same-day follow-on on **staging topology**: staging gets its own API + Postgres
+  containers (separate volume), one Caddy routes prod vs staging by hostname
+  (~5 containers same-box), start same-box and split to a second box later if it
+  risks prod.

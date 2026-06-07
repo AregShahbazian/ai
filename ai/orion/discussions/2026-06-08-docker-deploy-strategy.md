@@ -95,3 +95,6 @@ the user understands the moving parts before committing.
   restore data → `compose up` → repoint DNS.
 - **Caddy as its own container** in the Compose stack (not bundled with the app);
   decide where static web files live (volume vs host mount).
+
+> Follow-on (same-day, separate session): **staging topology** →
+> [`2026-06-08-staging-topology.md`](2026-06-08-staging-topology.md).
