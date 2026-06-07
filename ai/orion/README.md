@@ -4,7 +4,8 @@ Root index for Orion's planning docs. Start here. Orion is the real mapping app
 (GPS tracking + offline maps); `~/git/track` was the buggy POC (inspiration only).
 
 ## Canonical docs
-- **MVP definition** → [`mvp.md`](mvp.md) — the first-release scope.
+- **MVP definition** → [`mvp.md`](mvp.md) — the first-release scope (the finite, phase-delivered epic).
+- **DevOps epic** → [`devops.md`](devops.md) — ongoing **concept epic** (infra/backend/CI-CD/ops); detail in [`devops/`](devops/). Not a phase.
 - **Feature backlog** → [`backlog.md`](backlog.md) — unsorted bag of feature ideas (`/feature`).
 - **Flutter cheatsheet** → [`cheatsheet.md`](cheatsheet.md) — setup / daily-dev / build commands.
 - **Bug fixes** → [`bugfix/`](bugfix/) — `.fix.md` investigation notes.
@@ -82,16 +83,13 @@ with ARB message files, **externalize every user-facing string** (the lone
 an optional in-app override, and keep it easy to add more languages later. Built so
 any new feature ships its strings localized from the start. No PRDs yet.
 
-### Phase 12 — DevOps (backend stack)
-Stand up Orion's backend/infra once it needs a real server (accounts, sync, CRUD
-APIs, shared data). **Locked stack** → [`phase-12/stack.md`](phase-12/stack.md):
-**Caddy** edge (HTTPS/TLS + reverse-proxy) → **Dart `shelf`** API →
-**PostgreSQL + PostGIS** (spatial queries), shipped as a **Docker Compose** stack
-(images built on GitHub runners, pushed to **ghcr.io**, pulled by the VPS), schema
-via **dbmate**. Docker chosen for reproducible cross-machine deploys + a staging
-DB — see [`phase-12/sources.md`](phase-12/sources.md) and the
-[2026-06-08 Docker deploy discussion](discussions/2026-06-08-docker-deploy-strategy.md).
-The existing GitHub Actions static deploy + Caddy serving stay intact. No PRDs yet.
+### Phase 12 — DevOps (MVP slice only)
+DevOps is an **ongoing concept epic**, not a phase → see [`devops.md`](devops.md) /
+[`devops/`](devops/). This phase carries only the sliver the MVP needs: **the edge**
+— Caddy serving the Flutter web build over HTTPS + the existing GitHub Actions
+static deploy. **No API/DB/containers for the MVP.** → [`phase-12/prd.md`](phase-12/prd.md).
+The full backend direction (Docker Compose: Caddy → Dart `shelf` → Postgres/PostGIS,
+ghcr images, prod+staging, gated tag releases) lives in the DevOps epic.
 
 > Note: "Phase 5 — Navigation" is **app-screen navigation**, not GPS routing/A→B
 > routing, which remains out of scope (see [`mvp.md`](mvp.md)).

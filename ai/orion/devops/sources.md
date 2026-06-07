@@ -1,6 +1,8 @@
-# Phase 12 — DevOps: sources & background
+# Orion DevOps — sources & background
 
-Pointers to the discussions and reasoning behind the Phase 12 backend stack.
+> Part of the ongoing **DevOps concept epic** ([`../devops.md`](../devops.md)).
+
+Pointers to the discussions and reasoning behind the DevOps backend stack.
 See [`stack.md`](stack.md) for the locked stack itself.
 
 ## Discussions

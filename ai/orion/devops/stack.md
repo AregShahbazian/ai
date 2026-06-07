@@ -1,8 +1,10 @@
-# Phase 12 — DevOps: backend stack
+# Orion DevOps — backend stack
+
+> Part of the ongoing **DevOps concept epic** ([`../devops.md`](../devops.md)).
 
 The locked backend/infra stack for Orion once it needs a real server (accounts,
 sync, CRUD APIs, shared data). Delivered as a **Docker Compose stack on the VPS**.
-The existing GitHub Actions static deploy and Caddy serving stay intact; this phase
+The existing GitHub Actions static deploy and Caddy serving stay intact; this work
 adds the API + DB and moves the runtime to containers.
 
 **Direction decided in**
