@@ -1,7 +1,7 @@
 ---
 id: phase-5-navigation
 title: Navigation — design
-status: implemented (device verification pending)
+status: implemented & verified on web + Android (2026-06-07)
 branch: feature/p5-navigation
 ---
 

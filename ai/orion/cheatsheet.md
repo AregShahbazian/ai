@@ -41,12 +41,18 @@ flutter run                         # debug build on the device
 # Web — in the browser DevTools console (window.orion, installed every build):
 await orion.dispatch('hud.followMe.tap')
 orion.logEvents(true); orion.dump(); orion.ids
+orion.webnav.dump()                            # router location vs browser URL, canPop, stack depth
+await orion.webnav.to('settings')              # navigate to a screen ('/' = back to map)
 
 # Mobile — from the laptop, against a running ./scripts/mobile/run.sh (debug/profile):
 ./scripts/mobile/orion.sh dump                 # → captured interaction buffer
 ./scripts/mobile/orion.sh logEvents on=true    # toggle per-event logging
 ./scripts/mobile/orion.sh dispatch id=hud.followMe.tap
+./scripts/mobile/orion.sh dispatch id=nav.screen.close     # back to the map
 ./scripts/mobile/orion.sh ids
+./scripts/mobile/navto.sh settings             # nav.screen.open {screen:'settings'}
+./scripts/mobile/webnav.sh                     # current screen route + nav state
+./scripts/mobile/webnav.sh location            # just the active route
 # URI auto-read from .dart_tool/orion_vmservice; localhost-forwarded (survives wifi switch)
 ```
 

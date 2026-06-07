@@ -1,7 +1,7 @@
 ---
 id: phase-5-navigation
 title: Navigation — review
-status: implemented (device verification pending)
+status: implemented & verified on web + Android (2026-06-07)
 branch: feature/p5-navigation
 ---
 
@@ -51,6 +51,11 @@ navigation plumbing**. The map stays alive across navigation (the pillar).
   guarantee. See `design.md` "Plain stacked routes + `push` — chosen".
 - **No `MapScreen` split** — it already *is* the map + HUD; it's just the home
   route now.
+- **Open handlers fire-and-forget the `push`.** `router.push()`'s Future only
+  completes when the screen is *popped*, so returning it from the dispatch handler
+  hung the dispatch (and any remote RPC / web Promise) until the user went back —
+  `navto.sh` never exited. Fixed with `unawaited(router.push(...))`; the handler
+  returns immediately (the screen still shows synchronously).
 
 `flutter analyze`: clean (`avoid_print` clean).
 
@@ -61,20 +66,20 @@ Code-verified:
 2. ✅ Taxonomy closed: new ids registered and in `InteractionIds.all`.
 3. ✅ No inline `router.*` in widgets — cog and back dispatch through the bus.
 
-Manual (device/web) — pending:
-4. App still opens on the live map at `/`; cog visible bottom-right below the FAB.
-5. Tap cog → Settings screen opens over the map; back arrow returns to the map.
-6. **Pillar:** `onMapCreated`/`onStyleLoaded` fire **once** total across
-   map→settings→back (log/assert controller identity); camera unchanged; no
-   blank flash; return is instant.
-7. Android **hardware back** from Settings returns to the map (same pop as the
-   back arrow); back at `/` exits the app.
-7a. **Hardware back is recorded:** after pressing it, `orion.dump()` shows a
-    `nav.screen.close` entry; the cog tap shows `hud.settings.tap`; the in-app
-    back arrow shows one `nav.screen.close` (no duplicate from the observer).
-8. **Web:** settings cog clears the attribution ⓘ (no collision); tap-through to
-   the map works at `/`.
-9. Bridge: `orion.dispatch('hud.settings.tap')` opens Settings;
-   `orion.dispatch('nav.screen.close')` returns to the map.
-10. (Optional) temp debug polyline on the map is untouched across navigation —
-    proves "no reload" with data present.
+Manual (device/web) — ✅ verified on web + Android (2026-06-07):
+4. ✅ App opens on the live map at `/`; cog visible bottom-right below the FAB.
+5. ✅ Tap cog → Settings opens over the map; back arrow returns to the map.
+6. ✅ **Pillar:** map stays alive across map→settings→back (no remount/reload,
+   camera unchanged, no blank flash, instant return).
+7. ✅ Android **hardware back** from Settings returns to the map; back at `/`
+   exits the app.
+7a. ✅ **Hardware back is recorded:** `orion.dump()` shows `nav.screen.close`;
+    cog shows `hud.settings.tap`; in-app back arrow shows one `nav.screen.close`
+    (no observer duplicate).
+8. ✅ **Web:** settings cog clears the attribution ⓘ; tap-through to the map
+   works at `/`.
+9. ✅ Bridge: web `orion.webnav.to('settings')` / `orion.dispatch(...)` and
+   mobile `scripts/mobile/navto.sh` drive navigation; `nav.screen.close` / `to('/')`
+   return to the map.
+10. (Not run) temp debug polyline across navigation — deferred; covered when real
+    map data lands (Phase 7).
