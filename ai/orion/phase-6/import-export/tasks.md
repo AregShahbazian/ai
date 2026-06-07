@@ -1,9 +1,14 @@
 ---
 id: phase-6-import-export
 title: Import / Export Tracks — tasks
-status: draft
+status: implemented (2026-06-07); device verification pending
 branch: feature/p6-import-export
 ---
+
+> **All tasks implemented** — `flutter analyze` clean, web build green, parser
+> re-verified on the real samples. Manual web/device checks tracked in
+> [`review.md`](review.md). Codegen needs `--force-jit` on this toolchain (see
+> review). Below kept for reference.
 
 Ordered, each independently verifiable. Reuse over reinvent: port `track/`'s
 parser, stand up Drift, wire through the existing `InteractionController` /
