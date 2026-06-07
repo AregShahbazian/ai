@@ -56,7 +56,7 @@ Command; a central dispatcher executes it and an interceptor records it.
   routes through the same handler the UI uses, not a parallel code path.
 - Initial coverage (must-have): the interactions that exist as of Phase 2 —
   HUD buttons (Follow-Me, reset-orientation), map camera moves, and screen
-  navigation once Phase 4 lands.
+  navigation once Phase 5 lands.
 - Dispatch is **fire-and-acknowledge**: the caller learns whether the
   interaction was accepted/executed.
 
@@ -99,7 +99,7 @@ Command; a central dispatcher executes it and an interceptor records it.
 
 - Sits beneath the existing Phase 2 HUD; those features get **retrofitted** to
   dispatch through the controller.
-- Should be in place **before Phase 4 (Navigation)** so screen-navigation
+- Should be in place **before Phase 5 (Navigation)** so screen-navigation
   interactions are modelled in the taxonomy from the start.
 - Relates to the deferred **Runtime-state inspection** brainstorm
   (`discussions/2026-06-04-runtime-state-inspection.md`) — the interaction log

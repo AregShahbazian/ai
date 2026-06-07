@@ -32,30 +32,34 @@ User location, plus all the location/map-polish tasks already scoped below.
 ### Phase 3 — Interaction Controller (app-global command bus + interaction log)
 - **Interaction Controller** → [`phase-3/interaction-controller/prd.md`](phase-3/interaction-controller/prd.md) (`id: phase-3-interaction-controller`) — ✅ **implemented (done for now)**; branch `feature/p3-interaction-controller` (pushed). One app-global channel for every meaningful interaction: **dispatch** programmatically (as if the user did them) and **observe + locally log** the last N. Hand-rolled command bus + ring-buffer interceptor (decided against `flutter_bloc` — Orion is plain `ChangeNotifier`), closed hierarchical taxonomy (`domain.subject.action`). HUD/map interactions retrofitted to dispatch through it; web-only dev console bridge (`orion.dispatch(...)`). **Map camera gestures** (`map.{zoom,scroll,rotate,tilt}.changed`) captured on settle via a record-only `observe()` half (MapLibre runs them natively — nothing to execute) and re-dispatchable to drive the camera. In-memory only — persistence/export deferred. Full PRD→design→tasks→review.
 
-### Phase 4 — Navigation (app shell)
-A new full screen, reached via a HUD button — the home for what comes later
-(settings, tracks, routes). This phase only stands up the screen + navigation
-plumbing; the sections it hosts arrive in later phases. Models its
-screen-navigation interactions in the Phase 3 taxonomy from the start. No PRDs yet.
+### Phase 4 — HUD (shared HUD controls)
+One consistent style for every map-HUD control, so new buttons (the Phase 5
+settings cog, future recording controls) reuse one base instead of reinventing it.
+- **Shared HudButton** → [`phase-4/hud-button/prd.md`](phase-4/hud-button/prd.md) (`id: phase-4-hud-button`) — ✅ **implemented**; branch `feature/p4-hud-button`. One reusable HUD-button base (compass's 44 dp circle + shadow as the fixed style; per-button bg/fg color); migrated `CompassButton` + `LocationFab` onto it so all HUD controls match. Also landed: **edge-to-edge transparent system bars** (map fills behind the nav bar; SafeArea keeps the HUD clear) and the **location FAB pinned bottom-right, lifted clear of the OpenFreeMap attribution** (forced to the compact "ⓘ" on web so it never collides). Full PRD→design→tasks→review.
 
-### Phase 5 — Import / export tracks
+### Phase 5 — Navigation (app shell)
+Stand up the app shell: leave the live map for a full-screen page (first one:
+**Settings**, empty) and come back, with the map kept alive the whole time.
+- **Navigation** → [`phase-5/navigation/prd.md`](phase-5/navigation/prd.md) (`id: phase-5-navigation`) — 📝 **planned (PRD→design→tasks)**. `go_router` `ShellRoute` with the map persistent in the shell builder (never re-mounted); pages render over it. HUD **cog** button → `/settings` (empty placeholder). Nav modelled in the Phase 3 taxonomy both ways (`hud.settings.tap`, `nav.screen.open/close`); `push` for opening, back = `nav.screen.close` (a pop) so Android back is intuitive and modals close on back. **No custom navigation plumbing** — off-the-shelf go_router. See design's build-vs-buy verdict.
+
+### Phase 6 — Import / export tracks
 Import existing **Gaia GPS exports** (and re-export them). Imported tracks get
 their own page and are **listed**: list items show a **summary**, the item-detail
 page shows **full stats**. **No map rendering of tracks yet.** `~/git/track` had
 import/export but its correctness was unverified — mine for reference, re-verify.
 No PRDs yet.
 
-### Phase 6 — Render tracks on map
+### Phase 7 — Render tracks on map
 Draw imported tracks on the map. Must be **efficient and scalable to much more
 data** than a single track: use the efficient drawing callback/API `track` used to
 keep the map smooth with multiple large tracks, and avoid unnecessary
 re-renders/repaints. Confirm our impl is at least as efficient. No PRDs yet.
 
-### Phase 7 — Track recording
+### Phase 8 — Track recording
 Record tracks live: new HUD button(s) to start/stop, store tracks **locally**.
 **No account/backend yet.** More details to follow. No PRDs yet.
 
-### Phase 8 — Language support (i18n)
+### Phase 9 — Language support (i18n)
 Localize **as much of the app as possible** — **at least 2 languages** to start
 (**English** + **Tagalog/Filipino**, matching the PH focus; `~/git/track` already
 had `app_en.arb` / `app_tl.arb` to mine). Set up `flutter_localizations` + `intl`
@@ -64,7 +68,7 @@ with ARB message files, **externalize every user-facing string** (the lone
 an optional in-app override, and keep it easy to add more languages later. Built so
 any new feature ships its strings localized from the start. No PRDs yet.
 
-> Note: "Phase 4 — Navigation" is **app-screen navigation**, not GPS routing/A→B
+> Note: "Phase 5 — Navigation" is **app-screen navigation**, not GPS routing/A→B
 > routing, which remains out of scope (see [`mvp.md`](mvp.md)).
 
 ## Discussions
@@ -117,5 +121,6 @@ box and reference the source discussion in the commit/PRD.
 - Tiles: OpenFreeMap public server for **MVP1**; **self-host PH tiles post-MVP1**.
 - Background recording target: **wide range of common PH Android phones** (incl. aggressive OEMs).
 - **Interactions:** every new user action wires through the `InteractionController` **both ways** — captured (`dispatch`/`observe`) and programmatically dispatchable; reachable remotely via `window.orion` (web) and `ext.orion.*` VM service extensions (native, `scripts/mobile/orion.sh`). No inline-handler bypass. See `phase-3/interaction-controller/design.md`.
+- **Persistent state, transient screens:** expensive, long-lived state (the map + controller, and later track/route/waypoint data) is owned by a persistent root shell, created **once**; navigation never unmounts/re-creates it. The map stays alive across navigation (no remount/reload/re-fit); data pages **never fetch on mount** — they observe a long-lived controller that fetched once, so navigating to/from them is instant and re-fetch only happens the first time. Tearing the map down for a specific page is an explicit, per-destination opt-out, never the default. (`track`'s laggy nav came from violating this.) See `phase-5/navigation/prd.md`.
 
 (Durable decisions also live in memory — see `MEMORY.md` pointers prefixed `orion:`.)

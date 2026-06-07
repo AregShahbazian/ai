@@ -15,3 +15,5 @@ up; check them off (`[x]`) or remove them once shipped.
 - [ ] Export route/track (partially) as an animated GIF  <!-- 2026-06-06 -->
       GIF is a map render that moves as if navigating through part of the track/route. Map choice, custom tags, etc. Future feature.
 - [ ] DevOps agent specialized for devops tasks  <!-- 2026-06-06 -->
+- [ ] Bottom navbar on all non-map pages  <!-- 2026-06-07 -->
+      Once on settings/tracks/etc., a bottom navbar makes moving between pages easier. Not shown on the map page.
