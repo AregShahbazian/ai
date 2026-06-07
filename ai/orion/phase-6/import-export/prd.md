@@ -72,9 +72,9 @@ Two real-world shapes of the *same* trip, both must import cleanly:
   the same normalized type; flatten format differences (time precision, color
   source, CDATA) at import. Nothing format-specific persists downstream.
 - **Persisted with Drift** (SQLite) — works on **both web (WASM SQLite) and
-  mobile** from one API, matching Orion's web-first dev + mobile runtime. (MVP
-  listed Drift as TBD; this confirms it.) Plain `sqflite` is mobile-only, so not
-  enough on its own.
+  mobile** from one API. Web and Android are **both production targets**, so
+  persistence (and import perf) must be solid on each. (MVP listed Drift as TBD;
+  this confirms it.) Plain `sqflite` is mobile-only, so not enough on its own.
 
 ### Structure to parse
 - A file may contain **N `<trk>`** → import must handle multi-track files, not

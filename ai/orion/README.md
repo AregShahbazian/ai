@@ -113,7 +113,7 @@ box and reference the source discussion in the commit/PRD.
 
 ## Key decisions (quick reference)
 - App: name **Orion**, `applicationId com.mby4m.orion` (track was unpublished).
-- Stack: Flutter + **`maplibre_gl` v0.26.1** + SQLite (Drift TBD); **web-first** dev, phone for native.
+- Stack: Flutter + **`maplibre_gl` v0.26.1** + SQLite (Drift). **Web and Android are both first-class production targets** — web is web-first for the *dev loop*, but it ships to real users too (and may gain web-only features later), so it must be production-quality, not just a dev convenience. Phone for native testing. iOS deferred.
 - Decentralization: **post-MVP**; local-first + central sync.
 - iOS: deferred, kept clean.
 - Export: **GPX first** (KML/others later). Offline UX mirrors `track`.
