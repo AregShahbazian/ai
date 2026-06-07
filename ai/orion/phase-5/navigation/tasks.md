@@ -44,9 +44,12 @@ never re-mounted by navigation (see `design.md`). Off-the-shelf `go_router`
       replaces only (see `design.md` "Navigation verbs").
 
 ## 6. HUD entry button
-- [ ] Add a cog/settings icon button (`Icons.settings`) to the SafeArea HUD
-      `Stack` (top-left). `onPressed` → `dispatch(hud.settings.tap)` — **no**
-      inline `router.push`.
+- [ ] Add a cog/settings `HudButton` (`Icons.settings`) **below the follow-me
+      FAB** in the bottom-right stack (make them a `Column`: FAB, then cog).
+      `onPressed` → `dispatch(hud.settings.tap)` — **no** inline `router.push`.
+- [ ] **Web only:** move the `kHudAttributionClearance` from the FAB to the cog
+      (now the lowest control) so it clears the bottom-right attribution ⓘ;
+      native needs none. Verify no collision with the ⓘ on web.
 
 ## 7. Verify the pillar (acceptance gate)
 - [ ] Map → `/settings` → back: assert/log `onMapCreated` + `onStyleLoaded` fire

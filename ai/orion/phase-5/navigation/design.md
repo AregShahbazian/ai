@@ -138,10 +138,19 @@ app start and never unregistered (app-lifetime).
 
 ## HUD entry point
 
-Add one button to the existing single SafeArea HUD `Stack` in the map HUD
-(alongside `CompassButton` + `LocationFab`) — a **cog / settings icon**
-(`Icons.settings`), top-left (top-right and bottom corners are taken).
-`onPressed` → dispatch `hud.settings.tap`.
+Add one `HudButton` (the Phase 4 shared base) to the existing single SafeArea
+HUD `Stack` — a **cog / settings icon** (`Icons.settings`), placed **below the
+follow-me `LocationFab`** in the bottom-right vertical stack (FAB on top, cog
+beneath it). `onPressed` → dispatch `hud.settings.tap`.
+
+**Web-only gap with the attribution ⓘ.** On web our own attribution lives
+bottom-right (`map_attribution.dart`), and the FAB is currently lifted clear of
+it by `kHudAttributionClearance` (`map_screen.dart`, `fabBottomInset`). Adding
+the cog *below* the FAB makes the **cog** the lowest control on web, so the
+attribution clearance must move to the cog (the lowest control) — it, not the
+FAB, is what now has to clear the ⓘ. On native (attribution is bottom-left)
+no extra clearance is needed. Build the two as a bottom-right `Column`
+(FAB, cog) and apply the web clearance to the column's bottom.
 
 ## Placeholder destination
 
