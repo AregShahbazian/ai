@@ -85,10 +85,13 @@ any new feature ships its strings localized from the start. No PRDs yet.
 ### Phase 12 — DevOps (backend stack)
 Stand up Orion's backend/infra once it needs a real server (accounts, sync, CRUD
 APIs, shared data). **Locked stack** → [`phase-12/stack.md`](phase-12/stack.md):
-**Caddy** edge (HTTPS/TLS + reverse-proxy) → **Dart `shelf`** API on
-`localhost:8080` → **PostgreSQL + PostGIS** (spatial queries), run under
-**systemd** (no Docker), schema via **dbmate**. Purely additive — the existing
-GitHub Actions SSH/rsync deploy + Caddy static serving are untouched. No PRDs yet.
+**Caddy** edge (HTTPS/TLS + reverse-proxy) → **Dart `shelf`** API →
+**PostgreSQL + PostGIS** (spatial queries), shipped as a **Docker Compose** stack
+(images built on GitHub runners, pushed to **ghcr.io**, pulled by the VPS), schema
+via **dbmate**. Docker chosen for reproducible cross-machine deploys + a staging
+DB — see [`phase-12/sources.md`](phase-12/sources.md) and the
+[2026-06-08 Docker deploy discussion](discussions/2026-06-08-docker-deploy-strategy.md).
+The existing GitHub Actions static deploy + Caddy serving stay intact. No PRDs yet.
 
 > Note: "Phase 5 — Navigation" is **app-screen navigation**, not GPS routing/A→B
 > routing, which remains out of scope (see [`mvp.md`](mvp.md)).
