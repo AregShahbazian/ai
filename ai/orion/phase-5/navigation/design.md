@@ -1,8 +1,8 @@
 ---
 id: phase-5-navigation
 title: Navigation — design
-status: draft
-branch: TBD
+status: implemented (device verification pending)
+branch: feature/p5-navigation
 ---
 
 ## Build-vs-buy verdict (read first)
@@ -40,63 +40,63 @@ tracks/routes tab group) whose widget state we want preserved — but even there
 our no-refetch guarantee comes from long-lived controllers (below), so it's
 optional, not load-bearing.
 
-### `ShellRoute` — chosen
+### Plain stacked routes + `push` — chosen
 
-`ShellRoute` builds a **persistent shell widget** around the routed `child`. We
-put the map (and HUD) in the shell builder, once; the routed page renders on top:
+The map is the **home route**; screens are `push`ed **over** it. Flutter's
+`Navigator` keeps the route beneath a pushed page alive (`maintainState` defaults
+to true), so the map — controller, camera, follow mode, future layers — is never
+disposed or reloaded while a screen is open. Popping returns to the exact same
+live map. No `Stack`, no overlay juggling, no custom plumbing.
 
 ```
-ShellRoute(
-  builder: (context, state, child) => Stack(children: [
-    const MapView(),     // persistent: built ONCE, never disposed by navigation
-    const MapHud(),      // compass / FAB / location — persistent with the map
-    child,               // the current route's page, painted OVER the map
-  ]),
+GoRouter(
+  initialLocation: '/',
   routes: [
-    GoRoute(path: '/',         builder: (_, __) => const SizedBox.shrink()), // map only
-    GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),  // placeholder
+    GoRoute(path: '/',         builder: (_, __) => const MapScreen()),     // home: the map
+    GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()), // pushed over it
     // later: /tracks, /routes …
   ],
 )
 ```
 
-Why it fits:
-- The map is created **once** in the shell builder and stays mounted for every
-  child route — controller, camera, follow mode, future layers all preserved.
-  Returning to `/` is instant: no remount, no reload, no re-fit.
-- A page can be **opaque** (covers the map — map still alive underneath) or
-  **partial/translucent** (Gaia-style panel — map visible behind), purely by how
-  the page widget paints. The shell doesn't care; both keep the map alive.
-- Pure go_router configuration. No custom plumbing.
+Why this and **not `ShellRoute`** (rejected): `ShellRoute` is built for *shared
+chrome* — its `child` is meant to **be** the page body, with persistent UI (a nav
+bar / drawer) wrapped around it. Using it to hold the map as a *backdrop* under an
+always-present `child` overlay is off-label: it forces a transparent home route
+(so the map shows through `child`) **and** an `IgnorePointer` (so taps reach the
+map under `child`). That machinery is a smell — the wrong tool for "persistent
+backdrop." Plain stacked routes give the same map-alive guarantee with none of it.
 
-Trade-off accepted: `ShellRoute` disposes a **page** when it's popped (pages are
-not kept alive across navigation). That's fine — see the data-page rule next; we
-deliberately do **not** rely on widget keep-alive for data freshness.
+Why it fits:
+- The map is created **once** (home route) and stays mounted beneath every pushed
+  screen — controller/camera/layers preserved. Returning is instant: no remount,
+  no reload, no re-fit.
+- Pure go_router configuration; standard `push`/`pop`.
+
+Trade-off accepted: an opaque pushed screen leaves the map **offstage** (kept
+alive, but not painted) — fine here, since Settings is opaque and you don't see
+the map behind it anyway. If we later want the map **visible behind a translucent
+panel** (Gaia-style), that's a *different* need met with a deliberate persistent
+`Stack` or a bottom sheet (`showModalBottomSheet` floats over the home body with
+no `IgnorePointer`) — still not `ShellRoute`.
 
 ## How the pillars map to mechanism
 
 | Pillar (README "Persistent state, transient screens") | Realized by |
 |---|---|
-| Map never unmounts/reloads | `ShellRoute` persistent builder (map built once) |
+| Map never unmounts/reloads | Map is the home route; pushed screens sit above it, `Navigator` keeps it alive (`maintainState`) |
 | Data pages don't re-fetch on mount (unless first time) | **Long-lived controllers**, not widget keep-alive — pages observe a `ChangeNotifier` that fetched once; covered when data pages land (Phase 6+), not this phase |
-| Tearing the map down for a page = explicit opt-out | A future destination renders **outside** the `ShellRoute` (a top-level `GoRoute`), so it isn't wrapped by the persistent map. Default routes live inside the shell |
-
-The map-alive default and the opt-out fall straight out of "inside the
-`ShellRoute` = map alive; outside it = map gone." No special API to invent.
+| Tearing the map down for a page = explicit opt-out | A future destination uses `go`/`pushReplacement` (replaces the stack, disposing the map) instead of `push` — an explicit per-call choice |
 
 ## App wiring changes
 
-- `pubspec.yaml`: add `go_router` (latest stable for SDK `^3.10.8`).
+- `pubspec.yaml`: add `go_router` (17.3.0).
 - `app.dart`: `MaterialApp(home: MapScreen())` → `MaterialApp.router(routerConfig: appRouter)`.
-- New `lib/app/router.dart` (or `lib/core/nav/router.dart`): the `GoRouter` with
-  the `ShellRoute` above.
-- **Split `MapScreen`**: today it's both the screen *and* the map. Extract the
-  map + HUD into a persistent widget(s) the shell builder mounts once
-  (`MapView` + the existing HUD `Stack`); the old `MapScreen` shell role is
-  replaced by `ShellRoute`. The map's `State`/controller logic is unchanged —
-  it just no longer sits under a per-navigation route.
+- New `lib/app/router.dart`: the `GoRouter` (routes above) + `registerNavInteractions`.
+- **No `MapScreen` split** — `MapScreen` already *is* the map + HUD; it's just the
+  home route now. State/controller logic unchanged.
   - Verify `onMapCreated` / `onStyleLoaded` fire **once** across navigations
-    (controller identity stable) — this is the concrete proof of the pillar.
+    (controller identity stable) — the concrete proof of the pillar.
 
 ## Interaction taxonomy additions (Phase 3, both ways)
 
@@ -117,8 +117,8 @@ Add to `interaction_ids.dart` (and `all`):
 - **Android hardware back, the in-app back/close button, and
   `nav.screen.close` are the same action — a pop.** Wire the back/close button to
   dispatch `nav.screen.close`, and let the system back button hit the same pop
-  (go_router's `BackButtonDispatcher` → inner `ShellRoute` Navigator). They must
-  never diverge. Back collapses pages one at a time and only exits the app at `/`.
+  (go_router's `BackButtonDispatcher` → the root `Navigator`). They must never
+  diverge. Back collapses pages one at a time and only exits the app at `/`.
 - This makes back **intuitive by default** and means **future modals
   (bottom sheets / dialogs) close on back press** for free, since they're pushed
   routes too.
@@ -131,6 +131,25 @@ All three go through `InteractionController.dispatch` so navigation is
 `ext.orion.*` extensions — automation can open/close screens. The HUD cog
 button dispatches `hud.settings.tap` instead of calling `router.push` inline (no
 inline-handler bypass — see README interactions rule).
+
+### Capturing system back (the observe half)
+
+Dispatch covers what the UI/automation *initiates*, but **Android hardware /
+edge-swipe back** is popped by go_router directly — it never reaches the bus. So,
+like native map gestures, it's captured with the **observe half**: a
+`NavigatorObserver` (`lib/app/nav_interaction_observer.dart`, attached via
+`GoRouter(observers:)`) calls `interactions.observe(nav.screen.open/close)` on
+`didPush`/`didPop`.
+
+To avoid double-recording the *dispatched* navigations (whose dispatch already
+logged them), each dispatch handler calls `observer.markDispatched()` right before
+it navigates; the observer consumes that flag and skips the matching push/pop —
+the exact `_programmaticCamera` guard pattern. Net result: the cog tap is logged
+as `hud.settings.tap`, the in-app back / console close as `nav.screen.close`, and
+**system back as an observed `nav.screen.close`** — each once.
+
+(Limitation: on web, browser back/forward is a declarative route rebuild and may
+not surface as `didPop`; Android hardware back does.)
 
 Registration lives wherever the router is reachable (e.g. an `AppShell`
 `State`, or a small nav controller that holds the `GoRouter`), registered once at

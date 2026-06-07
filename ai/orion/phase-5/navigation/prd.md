@@ -1,8 +1,8 @@
 ---
 id: phase-5-navigation
 title: Navigation — app shell (persistent map + screens)
-status: draft
-branch: TBD
+status: implemented (device verification pending)
+branch: feature/p5-navigation
 ---
 
 ## Goal
