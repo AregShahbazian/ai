@@ -1,7 +1,7 @@
 ---
 id: phase-6-import-export
 title: Import / Export Tracks — review
-status: implemented; pending device verification
+status: ✅ done — implemented & verified on web + Android (2026-06-07); merged to main
 branch: feature/p6-import-export
 ---
 
