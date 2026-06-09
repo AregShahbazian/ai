@@ -69,6 +69,19 @@ app-internal plumbing, not a test rig, and the tests exercise it either way:
 
 This is in-process and reuses our own plumbing — **no console bridge involved.**
 
+## Where it runs (VPS / CI)
+
+- **Web E2E runs headless on a plain VPS.** `flutter drive -d web-server
+  --browser-name=chrome --headless` needs only Chrome + a version-matched
+  chromedriver, no display. The `ORION_E2E` define makes the boot deterministic,
+  so it's CI-ready as-is.
+- **Mobile E2E effectively needs an emulator host.** `flutter drive -d <device>`
+  requires a real device or an Android emulator, and the emulator needs
+  KVM/nested virtualization — absent on most basic VPSes (software ARM emulation
+  is too slow). Options: a nested-virt-capable host, or a device farm (Firebase
+  Test Lab, BrowserStack). The runner/CI wiring itself is **DevOps**
+  ([`../../devops.md`](../../devops.md)), not this task.
+
 ## Non-goals
 
 - Headless/widget/golden coverage of the map view itself — it's a platform view;
