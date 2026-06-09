@@ -16,21 +16,28 @@ Be concise: one-liners for the work items, a short humanized paragraph for git.
 
 1. **MVPs** — read `~/ai/<repo>/mvp.md` (and any `mvp*.md`). One line each:
    name + the gist + state (e.g. "spec'd, not built").
-2. **Phases** — each `~/ai/<repo>/phase-*/`. One line each: `Phase N — <title>` +
+2. **Phases** — each `~/ai/<repo>/mvp/phase-*/`. One line each: `Phase N — <title>` +
    rolled-up status. **Also include coming/future phases** — any phase defined but
    not yet started (e.g. listed in `~/ai/<repo>/README.md` or `backlog.md`, or a
-   `phase-*/` dir with no task docs yet). Mark these as "planned / not started"
+   `mvp/phase-*/` dir with no task docs yet). Mark these as "planned / not started"
    so the user can see what's next.
 3. **Tasks** — each task dir inside a phase. One line each: task name + which docs
    exist (`prd/design/tasks/review`) + implementation state if known. **List every
    task of every phase**, including planned tasks of coming phases (even with no
    docs yet — show `(none)` / planned).
-4. **Git — code repo** (`git -C <repo-root>`):
+4. **Non-MVP epics** — ongoing concept epics that aren't MVP phases (currently only
+   **DevOps**: `~/ai/<repo>/devops.md` + the `~/ai/<repo>/devops/` dir). Treat each
+   epic like an MVP-level container, listed **after** all MVPs. One line for the
+   epic (name + gist + state). If the epic dir has **sub-folders**, list each as a
+   feature nested under the epic, in the **same format as MVP tasks** (name + docs
+   present + state). Loose files directly in the epic dir (not in a sub-folder) are
+   not features — don't list them.
+5. **Git — code repo** (`git -C <repo-root>`):
    - current branch; staged vs unstaged vs untracked (counts/kinds from
      `status --short`); ahead/behind upstream
      (`rev-list --left-right --count @{u}...HEAD`); if the branch has no upstream,
      say "not pushed yet".
-5. **Git — workflow docs in the `~/` repo**, scoped to this repo's dirs
+6. **Git — workflow docs in the `~/` repo**, scoped to this repo's dirs
    (`git -C ~ status --short -- ai/<repo>` and any related
    `.claude/projects/*/memory` orion files): staged vs unstaged; and unpushed
    commits touching them (`git -C ~ log --oneline @{u}..HEAD -- ai/<repo>`).
@@ -38,16 +45,20 @@ Be concise: one-liners for the work items, a short humanized paragraph for git.
 ## Output format (keep it tight)
 
 Display the work items **hierarchically** — tasks nested under their phase, phases
-nested under their MVP — since that's how they're actually organized. Show counts
-in the section header.
+nested under their MVP — since that's how they're actually organized. Non-MVP epics
+sit at the **same level as MVPs** and come **after** all of them (MVP1, MVP2, …,
+then DevOps, …), with their features nested like MVP tasks. Show counts in the
+section header.
 
 ```
 ## <Repo> — Overview
 
-**Work** — <M> MVP / <P> phases / <T> tasks
+**Work** — <M> MVP / <P> phases / <T> tasks / <E> epics
 - MVP<n>: <gist> — <state>
   - Phase <n> — <title>: <state>
     - <task>: <docs present> — <impl state>
+- <Epic>: <gist> — <state>
+  - <feature>: <docs present> — <impl state>
 
 **Git**
 - **code** (`<repo-root>`): on `<branch>`, <humanized: what's committed, what's
@@ -64,6 +75,9 @@ If a phase isn't yet tied to a specific MVP, nest it under the MVP it serves (Ph
   phases and their planned tasks always appear too, in the same one-line format, so
   the overview doubles as a "what's next" roadmap. Order phases ascending so the
   future ones sit at the bottom.
+- **List non-MVP epics after the MVPs** — at MVP level, with any sub-folder features
+  nested beneath them in the same format as tasks. An epic with no sub-folders shows
+  just its own line.
 - **Humanize git** — translate porcelain into plain English ("3 doc edits staged
   but not committed", "branch `phase-1-map` has 1 commit, not pushed yet"), not raw
   `git status` dumps.
