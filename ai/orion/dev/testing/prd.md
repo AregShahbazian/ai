@@ -1,7 +1,7 @@
 ---
 id: dev-testing
-title: Testing setup — a durable test strategy for an agent-developed Orion
-status: draft
+title: Testing setup — useful tests in every category for an agent-developed Orion
+status: in-progress
 epic: dev
 ---
 
@@ -18,18 +18,31 @@ Claude-coded, offline-first, map-heavy — so changes can be verified without
 eyeballing every one on a device. Pick the right test *types* for each part of
 the app, wire the tooling, and make writing/running tests a standard motion.
 
+**The task is not just the harness — it is to land genuinely useful tests in
+*each* category** (unit, widget, integration/e2e, and golden). "Useful" has a
+bar (see [Definition of done](#definition-of-done--a-useful-test-per-category)):
+a test must be **deterministic**, assert **real behaviour** (not a tautology or a
+constant), **fail if the feature regresses**, and **run in CI**. A passing suite
+that asserts nothing meaningful does not count. The category is only "done" when
+at least one such test exists and is exercised by `./scripts/...` + CI.
+
 ## Where we are today
 
-Two test files, both effectively **unit tests**:
+**Unit:** two files, both effectively unit tests —
+`test/interaction_controller_test.dart` (real value; locks down the app spine:
+dispatch runs handlers, payload/origin recorded, ring buffer evicts) and
+`test/widget_test.dart` (misnamed; asserts the map style URL constant — marginal).
+Coverage of GPX/stats/Drift is still missing.
 
-- `test/interaction_controller_test.dart` — real value; locks down the app spine
-  (dispatch runs handlers, payload/origin recorded, ring buffer evicts). High
-  leverage since every action routes through the bus.
-- `test/widget_test.dart` — misnamed; a plain unit test asserting the map style
-  URL constant. Marginal but cheap. The full-screen map is a MapLibre **platform
-  view**, not meaningfully testable headless — the file's comment admits this.
+**Integration/e2e:** harness is **built and green in CI** — `integration_test`
++ `flutter drive`, web (`-d web-server`, headless-capable) and mobile (real
+device), an `ORION_E2E` define for a deterministic fixed-camera boot, an
+`all_tests.dart` aggregate entrypoint, and `./scripts/{web,mobile}/e2e.sh`. Two
+real suites landed: **compass-reset** (rotate → confirm → tap reset → verify
+north-up) and **settings-nav** (open `/settings` → native back → home). The
+widget-Key-as-interaction-id convention is adopted for HUD controls.
 
-No widget, golden, or integration tests yet.
+**Widget:** none yet. **Golden:** none yet.
 
 ## The four types, and where each fits Orion
 
@@ -49,6 +62,28 @@ No widget, golden, or integration tests yet.
    the E2E harness, mobile and web (`flutter drive` + chromedriver) from one
    suite; codify one or two golden-path flows.
 4. **Golden** — non-map widgets only, once their UI is stable.
+
+## Definition of done — a useful test per category
+
+The task ships when **every** category below has at least one test meeting the
+"useful" bar (deterministic · asserts real behaviour · fails on regression · runs
+in CI). Each must be wired into the standard run (`flutter test` or
+`./scripts/.../e2e.sh`) so CI exercises it.
+
+- [ ] **Unit** — e.g. a GPX import→export **round-trip** on a staged real sample
+      asserting points/name/colour survive, plus track-stat math
+      (distance/elevation) on a known input. *(Spine unit tests already exist.)*
+- [ ] **Widget** — e.g. the Settings screen: toggling a `SwitchListTile`
+      dispatches the right id and flips persisted state; or a track-list row
+      renders its stats. Non-map UI only.
+- [x] **Integration/e2e** — compass-reset + settings-nav suites (above). Add a
+      **tracks import** flow (stub `file_picker` with a staged fixture GPX →
+      assert one track imported via the repository) to cover the data path.
+- [ ] **Golden** — one deterministic non-map widget (e.g. a track stat card /
+      list row) pinned with `matchesGoldenFile`. Never the map.
+
+"Useful" anti-examples to avoid: asserting a constant equals itself, a test with
+no `expect`, or one that passes whether or not the feature works.
 
 ## How E2E uses the InteractionController
 
@@ -93,8 +128,12 @@ several/no interactions. First adopter: `CompassButton` (`hud.resetOrientation.t
 
 - Headless/widget/golden coverage of the map view itself — it's a platform view;
   verified by running the app manually (`devLog`, eyeballing), not headless tests.
-- A CI pipeline to run all this — that's **DevOps** ([`../../devops.md`](../../devops.md)),
-  not this task. This task is about the tests and local tooling.
+- *Designing* the CI/deploy infrastructure — that's **DevOps**
+  ([`../../devops.md`](../../devops.md)). The CI workflow already runs these tests
+  on every push; this task owns the tests themselves and their local tooling, and
+  only requires that each lands *in* CI — not how the runner is built.
+- Mobile e2e in CI (needs an emulator host / device farm) — deferred to DevOps;
+  mobile suites run locally for now.
 
 ## Open questions
 
