@@ -113,10 +113,25 @@ match surrounding style; comments only when genuinely needed). Then:
 End with a ≤50w report in three labelled parts:
 - **Done** — what was built.
 - **Apply** — exact commands to see it (`flutter pub get` / hot-restart / `flutter run -d chrome` — only the steps actually needed).
-- **Test** — a few concrete checks.
+- **Test** — a few concrete manual checks.
 
-Remind in one clause: when the user commits the tested code in `~/git/orion`, the
-message should reference `[<id>]`.
+### 6 — Suggest automated tests  (separate ≤50w, after the user has tested)
+Once the feature is built and the user has manually tested it, **before any
+push**, add a **separate ≤50w** message suggesting **automated** tests worth
+writing for this feature. Follow the test strategy in
+`~/ai/orion/dev/testing/prd.md`:
+- Pick the **right type(s)** — unit (GPX/stats/Drift logic), widget (non-map UI),
+  integration/e2e (golden-path flows, in the style of the existing
+  `compass-reset` / `settings-nav` suites + the widget-Key-as-interaction-id
+  convention), golden (stable non-map widgets, last). Suggest only **genuinely
+  useful** tests (deterministic · assert real behaviour · fail on regression);
+  skip tautological or map-view tests.
+- Keep it a **suggestion** — short proposed flows, not the code.
+- **Do not run e2e tests yourself unless explicitly asked.**
+
+Then wait: the **user approves** which tests to write → you implement them → the
+**user runs them** and **green-lights the commit**. When the user commits the
+tested code in `~/git/orion`, the message references `[<id>]`. Never push.
 
 ## Commit protocol (two repos — keep them straight)
 
@@ -142,6 +157,7 @@ tool calls, code you write, or files you write. Respect an explicit `Nw-` overri
 - **Refuse backend/server/container/devops work** — ≤50w, name the blocker, suggest
   a path; don't implement it.
 - **Don't run the app; don't commit code.** Hand off with Apply/Test; the user tests.
+- **Suggest automated tests before any push** (separate ≤50w) — right type(s), useful only, in the style of the existing suites. **Never run e2e yourself unless asked.** User approves → you write them → user runs + green-lights the commit.
 - **`flutter analyze` is the done-gate** — clean before you report.
 - **Stage every workflow doc at creation** (`git -C ~ add`).
 - **Don't feature-creep the PRD.** Implement the spec, not your wishlist.
