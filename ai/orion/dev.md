@@ -39,5 +39,12 @@ worth keeping stable and well-organized as features land.
 
 - [`dev/console-bridge/prd.md`](dev/console-bridge/prd.md) — Console bridge +
   controller organization: a single stable `orion` contract, namespaced to
-  mirror the controllers, with commands routed through the bus and queries read
-  directly. Web first; mobile (VM-service) at parity.
+  mirror the controllers (`bus`/`map`/`settings`/`tracks`/`webnav`), with commands
+  routed through the bus and queries read directly. Web + mobile (VM-service) at
+  parity; adds crash-safety (no sync throws across interop, no unhandled
+  rejections) and closes the `settings.logEvents` bus-bypass leak. ✅ implemented
+  on `dev/console-bridge` (full PRD→design→tasks→review).
+- [`dev/testing/prd.md`](dev/testing/prd.md) — Testing setup: a durable test
+  strategy for an agent-developed, map-heavy Orion. Picks the right test type per
+  layer (unit-first for GPX/DB/stats; widget for non-map UI; console-bridge E2E as
+  integration; goldens last, never for the map). Status: draft.

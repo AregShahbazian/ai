@@ -110,6 +110,11 @@ are the links to follow when picking up new work.
 | 2026-06-04 | Devbox & driving Orion dev from the phone | [`discussions/2026-06-04-devbox-and-phone-access.md`](discussions/2026-06-04-devbox-and-phone-access.md) | yes |
 | 2026-06-04 | Runtime-state inspection in dev flow (brainstorm) | [`discussions/2026-06-04-runtime-state-inspection.md`](discussions/2026-06-04-runtime-state-inspection.md) | yes (deferred) |
 | 2026-06-06 | Dev-mode log monitoring (web + Android), one structured path | [`discussions/2026-06-06-dev-log-monitoring.md`](discussions/2026-06-06-dev-log-monitoring.md) | yes (partly done) |
+| 2026-06-08 | Phase 12 staging topology — containers & box layout | [`discussions/2026-06-08-staging-topology.md`](discussions/2026-06-08-staging-topology.md) | yes (DevOps epic) |
+| 2026-06-08 | Docker deploy strategy for the Phase 12 backend | [`discussions/2026-06-08-docker-deploy-strategy.md`](discussions/2026-06-08-docker-deploy-strategy.md) | yes (DevOps epic) |
+| 2026-06-08 | Per-feature staging deploys: frontend vs backend | [`discussions/2026-06-08-feature-staging-deploys.md`](discussions/2026-06-08-feature-staging-deploys.md) | yes (DevOps epic) |
+| 2026-06-08 | API container release: downtime & scaling | [`discussions/2026-06-08-api-deploy-downtime-scaling.md`](discussions/2026-06-08-api-deploy-downtime-scaling.md) | yes (DevOps epic) |
+| 2026-06-08 | Prod releases: tag-to-release with a manual gate | [`discussions/2026-06-08-prod-tag-release-gate.md`](discussions/2026-06-08-prod-tag-release-gate.md) | yes (DevOps epic) |
 
 ## Backlog — ideas to realize (with source)
 
@@ -135,6 +140,7 @@ box and reference the source discussion in the commit/PRD.
 - [ ] **orion-dev-box** (separate repo/agent) — Linux devbox hosting Claude Code on demand + build/serve APK at a private URL for phone testing (local-first → VPS, Tailscale) → *2026-06-04 devbox-and-phone-access*
 - [ ] **APK distribution to testers** — evaluate Firebase App Distribution / Play internal testing vs plain URL → *2026-06-04 devbox-and-phone-access*
 - [ ] **P2P / decentralized sharing (post-MVP)** — local-first + central sync first → *2026-06-03 decentralization*
+- [ ] **DevOps backend buildout** — staging topology, Docker deploy, per-feature staging, tag-gated prod releases, API downtime/scaling (detail in [`devops.md`](devops.md)) → *2026-06-08 staging-topology / docker-deploy-strategy / feature-staging-deploys / prod-tag-release-gate / api-deploy-downtime-scaling*
 
 ## Key decisions (quick reference)
 - App: name **Orion**, `applicationId com.mby4m.orion` (track was unpublished).

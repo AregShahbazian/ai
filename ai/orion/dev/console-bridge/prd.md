@@ -125,6 +125,30 @@ on both platforms:
 - Installed on every build, all platforms, including release/prod (unchanged from
   today).
 
+### Robustness (no crashes, no leaks, no surprises)
+
+The bridge must never destabilise the app it instruments. It is installed in
+release/prod, so a bad console/script call must fail *softly*, not crash the
+isolate or spam the console with unhandled errors.
+
+- **Every command returns a Promise / response that rejects cleanly** — a bridge
+  call must never throw *synchronously across the interop boundary*. A relative
+  move issued before the map is ready (`map.zoomBy` etc.) resolves to a rejected
+  Promise (web) / an `invalidParams` error response (native), never a raw thrown
+  Dart exception. Build the future *inside* the async wrapper so a synchronous
+  controller throw is converted to a rejection.
+- **No unhandled promise rejections.** Web closures catch dispatch/handler errors
+  and surface them as a `console.warn` + resolve, so a bad call never prints an
+  "Uncaught (in promise)".
+- **Native handlers catch.** Every `ext.orion.*` handler wraps its body and
+  returns a structured error response instead of letting an exception propagate
+  as an opaque RPC failure.
+- **Reads never throw.** `map.camera()`, `bus.ids`, `bus.dump()`, `webnav.*`
+  reads tolerate a not-yet-ready map/router and return `null`/empty rather than
+  throwing.
+- **No added per-interaction cost.** The reorg is closures-over-namespaces only;
+  it must not add work to the dispatch hot path or the ring buffer.
+
 ## Use cases (why)
 
 - A scripted end-to-end flow drives the same calls on web and mobile without
@@ -145,8 +169,12 @@ on both platforms:
 
 ## Open questions
 
-- Final name confirmation: `bus`, `map`, `settings`, `tracks`, `webnav`, plus
-  `bus.hud` for shortcuts. (Working assumption; `map` chosen over `mapnav`.)
-- How far to take mobile helper scripts vs. just documenting raw `ext.orion.*`.
-- Keep `webnav` as its own namespace, or fold route navigation under `bus`
-  shortcuts given it's bus-dispatched anyway.
+- ~~Final name confirmation~~ **Resolved:** `bus`, `map`, `settings`, `tracks`,
+  `webnav`, plus `bus.hud` for shortcuts (`map` over `mapnav`).
+- ~~How far to take mobile helper scripts~~ **Resolved:** keep the existing thin
+  wrappers (`orion.sh`, `cleartracks.sh`, `navto.sh`, `webnav.sh`) and just
+  re-point them at the namespaced extension names — `ext.orion.$cmd` already
+  accepts dotted names, so this is free. No new helper layer.
+- ~~Keep `webnav` as its own namespace~~ **Resolved:** keep it separate. It backs
+  go_router (not a controller) and mixes reads (`dump`/`location`) with commands
+  (`to`/`back`); folding it under `bus` shortcuts would hide the reads.
