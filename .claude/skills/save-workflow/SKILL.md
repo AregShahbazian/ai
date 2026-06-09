@@ -1,6 +1,6 @@
 ---
 name: save-workflow
-description: Regenerate the ~/ai/<repo>/README.md root overview from the workflow docs on disk — refresh the phases table, discussions index, and "ideas to realize" backlog, and fix cross-links. Triggered when the user types /save-workflow (or asks to "save the workflow" / "update the workflow readme").
+description: Regenerate the ~/ai/<repo>/README.md root overview from the workflow docs on disk — refresh the phases table, discussions index, and "ideas to realize" backlog, and fix cross-links. Also checks the code repo's architecture docs (CLAUDE.md + docs/architecture.md) and updates them if the app's architecture grew/changed enough. Triggered when the user types /save-workflow (or asks to "save the workflow" / "update the workflow readme").
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash]
 ---
 
@@ -57,13 +57,28 @@ current state of the workflow docs on disk, and keep cross-references correct an
    carry a single short "Part of Orion — see [README.md](README.md)" line near the
    top. Add it if missing; do NOT make it verbose or duplicate it.
 
-5. **Stage** the changes in the `~` repo: `git -C ~ add ai/<repo>/`. Do NOT commit
-   or push (those are explicit, separate actions).
+5. **Check the architecture docs in the code repo.** Two files describe the app's
+   architecture: the `## Architecture` section in the repo's `CLAUDE.md`
+   (always-loaded summary) and `docs/architecture.md` (full map). Compare both
+   against the current `lib/` reality (skim the directory layout, controllers,
+   feature folders, key packages in `pubspec.yaml`). If the architecture has
+   **changed or grown enough to matter** — a new top-level subsystem, a new
+   feature folder, a changed state/persistence/map approach, a new
+   platform-conditional boundary, or a core convention — update the docs:
+   - Keep `CLAUDE.md`'s section **lean** (the 6-ish essentials + the pointer to
+     `docs/architecture.md`); only add a bullet when a genuinely new pillar appears.
+   - Put the detail in `docs/architecture.md`.
+   - If nothing material changed, leave both untouched (idempotent — don't churn
+     wording). These files live in the **code repo**, so stage them there:
+     `git add CLAUDE.md docs/architecture.md`. Never commit or push.
 
-6. **Report** an **under-100-word** overview of *what* was updated and *why* —
-   which phases/discussions/backlog items were added, updated, or marked done, and
-   the reason (e.g. "new discussion saved", "Phase 1 design added", "backlog item
-   completed"). Keep it to the changes that matter; no filler.
+6. **Stage** the workflow changes in the `~` repo: `git -C ~ add ai/<repo>/`. Do
+   NOT commit or push (those are explicit, separate actions).
+
+7. **Report** an **under-100-word** overview of *what* was updated and *why* —
+   which phases/discussions/backlog items were added, updated, or marked done
+   (and any architecture-doc update + its reason). Keep it to the changes that
+   matter; no filler.
 
 ## Principles
 
