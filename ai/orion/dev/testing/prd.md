@@ -69,6 +69,13 @@ app-internal plumbing, not a test rig, and the tests exercise it either way:
 
 This is in-process and reuses our own plumbing — **no console bridge involved.**
 
+**Widget Key convention:** a widget that is the 1:1 trigger for one interaction
+gets `key: ValueKey(InteractionIds.<that>)`, so a test locates it with
+`find.byKey` using the same string the bus/console bridge use — one vocabulary,
+no parallel naming, and the bridge keeps driving via `dispatch` regardless. Add
+the key when a test first needs the widget; skip it where a widget fires
+several/no interactions. First adopter: `CompassButton` (`hud.resetOrientation.tap`).
+
 ## Where it runs (VPS / CI)
 
 - **Web E2E runs headless on a plain VPS.** `flutter drive -d web-server
