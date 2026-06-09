@@ -117,6 +117,13 @@ several/no interactions. First adopter: `CompassButton` (`hud.resetOrientation.t
   --browser-name=chrome --headless` needs only Chrome + a version-matched
   chromedriver, no display. The `ORION_E2E` define makes the boot deterministic,
   so it's CI-ready as-is.
+- **Navigation suites are mobile-only.** `flutter drive -d web-server` loses its
+  result channel (`$flutterDriverResult` undefined → hang/DriverError) when the
+  app changes the route — go_router updates `window.location` and a native-back
+  pop drives browser history. So any suite that navigates runs on a real device,
+  not web. `all_tests.dart` gates these behind `!kIsWeb`; camera/HUD/data suites
+  (no URL change) are web-safe. First example: `settings_nav` (mobile-only),
+  `compass_reset` (web + mobile).
 - **Mobile E2E effectively needs an emulator host.** `flutter drive -d <device>`
   requires a real device or an Android emulator, and the emulator needs
   KVM/nested virtualization — absent on most basic VPSes (software ARM emulation
