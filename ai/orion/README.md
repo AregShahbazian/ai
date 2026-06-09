@@ -6,6 +6,7 @@ Root index for Orion's planning docs. Start here. Orion is the real mapping app
 ## Canonical docs
 - **MVP definition** → [`mvp.md`](mvp.md) — the first-release scope (the finite, phase-delivered epic).
 - **DevOps epic** → [`devops.md`](devops.md) — ongoing **concept epic** (infra/backend/CI-CD/ops); detail in [`devops/`](devops/). Not a phase.
+- **Dev epic** → [`dev.md`](dev.md) — ongoing **concept epic** (developer experience / internal tooling: the `orion` automation bridge, controller organization, dev tooling); tasks in [`dev/`](dev/). Not a phase.
 - **Feature backlog** → [`backlog.md`](backlog.md) — unsorted bag of feature ideas (`/feature`).
 - **Flutter cheatsheet** → [`cheatsheet.md`](cheatsheet.md) — setup / daily-dev / build commands.
 - **Bug fixes** → [`bugfix/`](bugfix/) — `.fix.md` investigation notes.

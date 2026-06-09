@@ -28,10 +28,11 @@ Be concise: one-liners for the work items, a short humanized paragraph for git.
 4. **Non-MVP epics** — ongoing concept epics that aren't MVP phases (currently only
    **DevOps**: `~/ai/<repo>/devops.md` + the `~/ai/<repo>/devops/` dir). Treat each
    epic like an MVP-level container, listed **after** all MVPs. One line for the
-   epic (name + gist + state). If the epic dir has **sub-folders**, list each as a
-   feature nested under the epic, in the **same format as MVP tasks** (name + docs
-   present + state). Loose files directly in the epic dir (not in a sub-folder) are
-   not features — don't list them.
+   epic (name + gist + state). **Every sub-folder of an epic dir is a task** — list
+   each one nested under the epic, in the **same one-liner format as MVP/phase
+   tasks** (name + docs present: `prd/design/tasks/review` + impl state). Loose
+   files directly in the epic dir (not in a sub-folder) are not tasks — don't list
+   them.
 5. **Git — code repo** (`git -C <repo-root>`):
    - current branch; staged vs unstaged vs untracked (counts/kinds from
      `status --short`); ahead/behind upstream
@@ -75,9 +76,9 @@ If a phase isn't yet tied to a specific MVP, nest it under the MVP it serves (Ph
   phases and their planned tasks always appear too, in the same one-line format, so
   the overview doubles as a "what's next" roadmap. Order phases ascending so the
   future ones sit at the bottom.
-- **List non-MVP epics after the MVPs** — at MVP level, with any sub-folder features
-  nested beneath them in the same format as tasks. An epic with no sub-folders shows
-  just its own line.
+- **List non-MVP epics after the MVPs** — at MVP level. **Each sub-folder of the
+  epic is a task** and is listed nested beneath it in the same one-liner format as
+  phase tasks. An epic with no sub-folders shows just its own line.
 - **Humanize git** — translate porcelain into plain English ("3 doc edits staged
   but not committed", "branch `phase-1-map` has 1 commit, not pushed yet"), not raw
   `git status` dumps.
