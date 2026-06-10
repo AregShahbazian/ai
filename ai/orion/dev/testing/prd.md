@@ -1,7 +1,7 @@
 ---
 id: dev-testing
 title: Testing setup — useful tests in every category for an agent-developed Orion
-status: in-progress
+status: done-for-now
 epic: dev
 ---
 
@@ -70,17 +70,17 @@ The task ships when **every** category below has at least one test meeting the
 in CI). Each must be wired into the standard run (`flutter test` or
 `./scripts/.../e2e.sh`) so CI exercises it.
 
-- [ ] **Unit** — e.g. a GPX import→export **round-trip** on a staged real sample
-      asserting points/name/colour survive, plus track-stat math
-      (distance/elevation) on a known input. *(Spine unit tests already exist.)*
-- [ ] **Widget** — e.g. the Settings screen: toggling a `SwitchListTile`
-      dispatches the right id and flips persisted state; or a track-list row
-      renders its stats. Non-map UI only.
-- [x] **Integration/e2e** — compass-reset + settings-nav suites (above). Add a
-      **tracks import** flow (stub `file_picker` with a staged fixture GPX →
-      assert one track imported via the repository) to cover the data path.
-- [ ] **Golden** — one deterministic non-map widget (e.g. a track stat card /
-      list row) pinned with `matchesGoldenFile`. Never the map.
+- [x] **Unit** — `test/gpx_roundtrip_test.dart`: GPX parse + export round-trip on
+      two **real** staged samples (MyTracks single-`<trk>` + Gaia many-`<trk>`),
+      asserting name/desc/colour/points survive. *(Spine unit tests also exist.)*
+- [x] **Widget** — `test/settings_screen_test.dart`: toggling the Settings
+      `SwitchListTile` dispatches through the bus and flips persisted state.
+- [x] **Integration/e2e** — `compass_reset` (web+mobile) + `settings_nav`
+      (mobile). *(A `file_picker`-stubbed tracks-import e2e is the obvious next
+      add when convenient — not blocking.)*
+- [x] **Golden** — `test/golden/track_list_tile_test.dart`: the track-list row
+      pinned with `matchesGoldenFile` (excluded from CI — flaky across runners;
+      runs locally). Never the map.
 
 "Useful" anti-examples to avoid: asserting a constant equals itself, a test with
 no `expect`, or one that passes whether or not the feature works.

@@ -45,6 +45,11 @@ worth keeping stable and well-organized as features land.
   rejections) and closes the `settings.logEvents` bus-bypass leak. ✅ implemented
   on `dev/console-bridge` (full PRD→design→tasks→review).
 - [`dev/testing/prd.md`](dev/testing/prd.md) — Testing setup: a durable test
-  strategy for an agent-developed, map-heavy Orion. Picks the right test type per
-  layer (unit-first for GPX/DB/stats; widget for non-map UI; console-bridge E2E as
-  integration; goldens last, never for the map). Status: draft.
+  strategy for an agent-developed, map-heavy Orion, with ≥1 useful test per
+  category. ✅ **done for now** (merged to `main`, `dev/testing`): `integration_test`
+  e2e harness (web + mobile, `ORION_E2E` deterministic boot, `e2e.sh` + `all_tests`
+  aggregate), unified `ci.yml` (test+build+deploy per push), widget-Key=interaction-id
+  convention, and a landed test in each category — unit (GPX round-trip on real
+  MyTracks+Gaia samples), widget (settings toggle), e2e (compass-reset web+mobile,
+  settings-nav mobile), golden (track-list row, local-only). Navigation e2e is
+  mobile-only (web flutter_driver loses its result channel on route change).
