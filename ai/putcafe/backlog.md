@@ -14,3 +14,9 @@ check them off (`[x]`) or remove them once shipped.
       routing (e.g. `/api/staging/*`). Decide when multi-env or multi-user matters.
 - [ ] Rename positions-backend → session-backend  <!-- 2026-06-12 -->
       It owns sessions, positions, trades, balances — "session" is the truer name.
+- [ ] Pivot (swing high/low) detection in bot, visualized on chart  <!-- 2026-06-12 -->
+      Symmetric-window detector (lookback N=3 default) over candles-so-far; returns
+      `{time, type: high|low, price}` pivots for visualization only (triangle markers
+      above highs / below lows). Alternation enforcement = persisted togglable option,
+      editable pre-headless-session and live-adjustable during replay. Details:
+      `~/ai/putcafe/discussions/2026-06-12-pivot-detection.md`.
