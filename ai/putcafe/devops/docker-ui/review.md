@@ -47,3 +47,29 @@ wait-loop and both `ops.sh` health additions.
    `DOZZLE_ENABLE_ACTIONS`) — try restarting `api-bot-1` from the UI
 10. user check from own browser: open https://ops.46-250-232-224.sslip.io/,
     log in, browse containers/logs
+
+## Round 2: containerized edge + Caddy in the UI (2026-06-12)
+
+The shared edge Caddy moved into Docker (Orion-owned change —
+`orion-edge-container`, docs at `~/ai/orion/devops/edge-container/`); putcafe
+scripts followed: preconditions/validate/reload now go through Orion's `edge`
+compose stack instead of the `orion-web` systemd unit. Both Dozzle and the
+edge Caddy got `dev.dozzle.group` labels so each shows as its own sidebar
+group (Dozzle doesn't auto-group single-container compose projects).
+Screenshots: [groups](ops-ui-groups.png), [edge logs](ops-ui-edge-logs.png).
+
+### Files
+`scripts/dev/remote/edge/setup.sh` (docker-based preconditions, validate via
+`docker run caddy:2.11`, reload via `compose exec`),
+`scripts/dev/remote/edge/ops.sh` + `scripts/dev/local/edge/ops.sh`
+(compose-based edge ops), `scripts/dev/remote/edge/ops-ui/compose.yml`
+(group label), `site.caddy` (comment).
+
+### Verification
+11. ✅ `setup-ops-ui.sh` end-to-end green against the containerized edge;
+    `ops.sh health`: `/web/` 200, `/web/staging/` 200, ops UI 200
+    (agent-verified)
+12. ✅ Dozzle sidebar: Custom Groups `edge` + `ops-ui`, `api` compose group —
+    Caddy visible separately with live logs (agent-verified)
+13. ✅ full regression sweep 200 (orion web/apk, putcafe web/staging/api)
+    (agent-verified)
