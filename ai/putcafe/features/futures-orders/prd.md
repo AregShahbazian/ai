@@ -6,6 +6,24 @@ id: pc-futures-orders
 
 Builds on [`../../mvp/prd.md`](../../mvp/prd.md). Origin:
 [`../../discussions/2026-06-12-futures-order-protocol.md`](../../discussions/2026-06-12-futures-order-protocol.md).
+The margin / leverage / liquidation slice already shipped for the pivot sim in
+[`../leverage/prd.md`](../leverage/prd.md) (`pc-leverage`); this feature is the
+remaining order-protocol + matching engine and the full backend cutover.
+
+## Scope decisions
+
+- **Futures-only, full cutover.** The positions-backend becomes a **futures**
+  backend (hedge-mode, isolated margin) — **spot is dropped entirely**, no spot
+  path remains. The migration's interim state is unconstrained, but
+  **post-migration every algo runs on futures**.
+- **All algos work on the new engine.** Both **DCA** and **pivot** emit order
+  actions through the protocol and keep working after the cutover.
+- **Pivot migrates fully.** The pivot strategy moves off today's stateless
+  bot-side sim onto this real persisted order/matching engine and must stay
+  working (same backtest semantics, now order-driven).
+- **Sessions persist.** Futures sessions — positions per side, orders, balances,
+  events — persist in the DB (as DCA sessions do today), surviving reload; not
+  stateless.
 
 ## Requirements
 
@@ -74,8 +92,15 @@ Builds on [`../../mvp/prd.md`](../../mvp/prd.md). Origin:
 - No cross margin, no one-way mode, no funding-rate simulation (may come
   later).
 - No partial fills — orders fill in full when crossed.
-- The **pivot-based strategy** that emits these actions is a separate feature
-  (builds on `pc-pivots` + this); this PRD covers only the protocol, the
-  futures model, and the matching simulation. A trivial test algo is enough to
-  exercise it.
 - No order placement UI for the user — orders originate from the bot only.
+
+## Migration
+
+- **DCA and pivot both port onto the order protocol** as part of this work (see
+  Scope decisions) — they're not deferred. A trivial test algo may be used to
+  bring the engine up first, but the feature isn't done until both real algos
+  run on it and the spot path is removed.
+- The current stateless `/api/bot/simulate` pivot sim is replaced by
+  persisted, order-driven futures sessions; existing replay/headless semantics
+  and the overview-widget order ledger must continue to work against the real
+  engine.
