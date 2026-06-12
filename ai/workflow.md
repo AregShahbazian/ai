@@ -25,6 +25,16 @@ Run long arcs freely between these points, but always stop and wait for me at:
   `~/ai/orion/workflow.md`.
 - Other repos: default to phase-gated unless their workflow.md says otherwise.
 
+### On-the-fly docs — the default forward mode
+
+For any non-trivial feature/change, generate the workflow docs **on the fly**
+and run the whole loop in one go: `prd.md` → `design.md` → `tasks.md` →
+implement → `review.md`, in the proper per-task dir under `~/ai/<repo>/…`.
+Don't wait for separate per-phase prompts. Document everything done this way;
+prompt me only on genuine blockers. When no existing dir fits, propose a
+location/organization for the new docs (briefly, in the same turn) and proceed
+with it.
+
 ### Blockers
 
 If you must ask, ask one clear question and continue everything that doesn't
