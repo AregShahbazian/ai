@@ -23,3 +23,17 @@ Inherits the shared workflow at `~/ai/workflow.md`.
   under `scripts/dev/local/` — give it a clear name and keep it idempotent. Then
   ask permission to either (a) run the script myself, or (b) have you run it.
   Never end a task with "now run `docker …`" in prose.
+- **Verify and debug through the console bridge (`window.pc`), not UI clicks.**
+  The app exposes a scriptable bridge (README "Console bridge";
+  `frontend/src/debug/bridge.ts`; feature docs in
+  `~/ai/putcafe/features/console-bridge/`). Drive scenarios via `pc.*` in
+  DevTools or Playwright `page.evaluate`: `pc.session.start` (awaitable),
+  `pc.playTo`/`pc.waitFor.*` to position the replay, `pc.state.*` for app
+  state, `pc.chart.*` for the *rendered* chart (render-settled), and
+  `pc.verify()` for the frontend↔backend cross-check. `yarn e2e` runs the
+  committed spec on its own dev server (:5183) — never point tests at :5173,
+  it may be another worktree's server. Caveats: HMR edits to `bridge.ts`
+  split module state (reload the page); `playTo` can overshoot at speeds ≥100.
+  **When a feature adds state, actions, or chart visuals, extend the bridge
+  and `pc.help()` in the same change** — the bridge staying complete is what
+  keeps scripted verification possible.
