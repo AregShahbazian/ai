@@ -1,5 +1,43 @@
 # Development Workflow
 
+## When running as Fable 5 (Claude Fable 5 / Mythos-class only)
+
+These rules apply only when the model is Fable 5; older models keep the
+behavior defined elsewhere in this file.
+
+### Hard stops — never cross autonomously
+
+Run long arcs freely between these points, but always stop and wait for me at:
+
+1. **Debugging:** never apply a fix before the hypothesis is confirmed with logs
+   (see Debugging Procedure). Suggest + add logs, then wait.
+2. **`git push`:** never, in any repo, unless explicitly told.
+3. **Connected devices:** never write to an attached device (adb push/install/rm,
+   settings) without asking first.
+4. **Review rounds:** write the review doc only — no code fixes, no design/tasks
+   edits, unless the prompt explicitly says to.
+
+### Execution mode per repo
+
+- **crypto_base_scanner_desktop:** phase-gated — one workflow phase per prompt
+  (PRD only, then design+tasks, then implement), as defined below.
+- **orion:** one-go — full PRD→design→tasks→implement→review loop per
+  `~/ai/orion/workflow.md`.
+- Other repos: default to phase-gated unless their workflow.md says otherwise.
+
+### Blockers
+
+If you must ask, ask one clear question and continue everything that doesn't
+depend on the answer. Don't park the whole task on a single open point.
+
+### Review verification via subagents
+
+In review rounds, you may delegate verification to subagents — e.g. an
+adversarial re-check per numbered bug/checklist item — and fold the verdicts
+back into the review doc. Checklist items verified only by a subagent (not by
+me) get ✅ plus a `(agent-verified)` note, so my manual verification stays
+distinguishable.
+
 ## File Structure
 
 Docs live in `ai/<feature>/<task>/<subtask>/`. Each subtask folder contains its workflow docs as files:
