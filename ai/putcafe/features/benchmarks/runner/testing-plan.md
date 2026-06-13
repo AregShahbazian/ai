@@ -129,3 +129,25 @@ done
 - Implement the per-market shared-window draw (fairness rule 2).
 - Generate the 7 per-algo specs from tuned defaults.
 - Optional: a `compare.sh` that merges per-algo exports into one ranked table.
+
+## Findings (2026-06-13)
+
+All 7 algos benchmarked (1 fixed config each, 1h, 7 deep exchanges, 30 random
+500–2000-bar windows; 2340 sessions/algo) + a **donchian benchmark-map** sweep
+(`period{20,30,50} × tpSlRatio{2,3} × slCapPct{4,6}` = 12 configs, 9360 sessions).
+All runs 0 gaps / 0 errors.
+
+- **Everything is net-negative on 1h majors**, fees included. Median return per
+  window: pivot −0.11% (least bad), bollinger −0.31%, donchian −0.43%,
+  rsi_revert −0.92%, ma_cross −0.95%, macd −2.98% (worst, fat −51% tail).
+- **`dca` reads +0.00% everywhere — a no-op**, not an edge: its 7-day cadence
+  barely trades inside ~3-week–3-month windows. (Config issue, flagged.)
+- **The donchian sweep found no profitable config** — best is `period30 tp2 sl6`
+  at median −0.42%, statistically tied with the baseline. Tuning these knobs over
+  this grid does not rescue donchian on 1h.
+- **Conclusion:** not tradeable as-is on 1h. Next levers worth trying: other
+  resolutions (1d), regime-segmented windows, leverage off, or different algo
+  families — not more of this grid.
+
+All surfaced in the UI (leaderboard rows + compare box-plots/heatmap, labeled
+per config).
