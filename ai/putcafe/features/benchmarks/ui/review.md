@@ -35,7 +35,12 @@ re-ran the web job once nothing competed. (Operational, no code change.)
    histogram (+42.18% green), clickable per-market bars — the donchian run
    properly visualized
 
+### Round 2 — cross-algo compare (2026-06-13)
+- All 7 algos benchmarked (16,380 sessions, 0 gaps/errors). Added compare view:
+  box-plots (identical windows) + per-market winner heatmap. Verified live
+  (Playwright). Surfaced the dca no-op visually (flat 0 line, wins markets by
+  default) — a config issue, not a real edge.
+
 ### Remaining (user / future)
-- Cross-algo compare once ≥2 algos are benchmarked.
 - Frontend candle-endpoint reads likely need the same `immutable=1` (pre-existing
   in candle-store; out of scope here).

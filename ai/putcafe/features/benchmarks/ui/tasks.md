@@ -23,7 +23,11 @@ Design: [design.md](design.md). Branch `feature/benchmarks-runner`. All ✅ done
 
 URL: `https://putcafe.46-250-232-224.sslip.io/web/benchmarks-runner/#/bench`
 
+## T5 — cross-algo compare view ✅
+- `/api/bot/bench/compare` (box stats + per-market matrix); UI "Compare algos" tab:
+  BoxPlot of return distributions + per-market winner heatmap (★ best/market).
+  Verified live with all 7 algos (78 markets).
+
 ## Follow-ups (not done)
-- Cross-algo compare view (needs ≥2 algos benchmarked; groups by shared windows).
 - Sessions drill-down table per market; runs/provenance view.
 - Combined cross-algo leaderboard endpoint.
