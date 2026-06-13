@@ -17,6 +17,13 @@ Run long arcs freely between these points, but always stop and wait for me at:
 4. **Review rounds:** write the review doc only — no code fixes, no design/tasks
    edits, unless the prompt explicitly says to.
 
+### Delegate gathering to Sonnet sub-agents
+
+If you need to read code, logs, or do online research, create a **Sonnet**
+sub-agent to gather, process, and summarize the data before handing off to
+you. You, the Fable, do the reasoning/analysis only, on the processed,
+summarized data.
+
 ### Execution mode per repo
 
 - **crypto_base_scanner_desktop:** phase-gated — one workflow phase per prompt
