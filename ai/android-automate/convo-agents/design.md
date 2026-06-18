@@ -121,14 +121,28 @@ when the user gives verbal instructions):
 }
 ```
 
-- **`send` is the master safety gate.** Effective `send` must be `true` for a
-  message to actually be typed+sent; otherwise the run is **dry-run** (compose,
-  log, don't touch the device's input field). Default `false` everywhere, and a
-  CLI `--send` is still required on top (belt-and-suspenders, honoring the
-  "never edit a connected device without asking" rule).
 - **Tracked set:** a convo is processed iff `config/convos/<id>.json` exists.
   `--convo "Name"` targets one; `--all` processes every visible convo using
-  global settings only (still dry-run unless `send` + `--send`).
+  global settings only.
+
+## Send gating — queue-for-review (decided 2026-06-18)
+
+Composing **never touches the device**. The chosen gate is a two-step
+review queue, not autonomous send:
+
+1. A compose run writes each warranted reply to `data/outbox.json` as
+   `{convo_id, name, reply, reason, status: "pending", queued_at}`. Re-composing
+   the same convo replaces its *pending* entry; `approved`/`sent` entries are
+   never clobbered.
+2. The user reviews/edits `outbox.json` and sets `status: "approved"` on replies
+   they want sent (editing the `reply` text is fine).
+3. `--flush` opens each approved convo, types+sends the reply via `send_reply()`
+   (input `EditText` + heuristic/`send_button_id` send button), marks it `sent`,
+   and updates that convo's memory `last_seen → me`.
+
+This satisfies the "never edit a connected device without asking" rule: the
+device is only mutated during an explicit `--flush`, against entries the user
+hand-approved.
 
 ## The agent turn (one Anthropic call)
 
@@ -162,14 +176,9 @@ The model interprets the messages and decides `should_reply` + composes `reply`;
 turn-ownership was already decided programmatically before the call, so the model
 only sees a convo where it's our turn.
 
-### Sending (gated)
-
-If effective `send` and CLI `--send`: tap the `EditText`,
-`d.send_keys(reply)` (or `set_text`), then tap the send affordance (configurable
-id; default heuristic = clickable node on the input row, right of the EditText).
-Then poll for the new outgoing bubble and update memory. Otherwise print
-`[dry-run] would send: …` and still update `summary`/`facts` from the response
-(but not `last_seen` to "me", since nothing was sent).
+At compose time we always update `summary`/`facts` and the `last_seen` pointer to
+the latest incoming message, and queue the reply (pending). `last_seen` only
+flips to `me` at `--flush` time, when the reply is actually sent.
 
 ## Files
 
