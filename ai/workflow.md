@@ -1,5 +1,13 @@
 # Development Workflow
 
+## Mega-prompt (any model)
+
+When I say **"run the megaprompt for `<prd path>`"** (or similar), read
+`~/ai/megaprompt.md` and follow it: the full design → tasks → implement →
+self-review → review.md loop in one prompt, ending with **How to apply
+changes** and **What to test** in chat. An explicit megaprompt invocation
+overrides per-repo phase-gating for that run.
+
 ## When running as Fable 5 (Claude Fable 5 / Mythos-class only)
 
 These rules apply only when the model is Fable 5; older models keep the
