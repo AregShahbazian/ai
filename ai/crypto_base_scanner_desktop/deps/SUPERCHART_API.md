@@ -1,8 +1,8 @@
 # Superchart API Reference
 
 > Source: `$SUPERCHART_DIR` (branch: main)
-> Superchart git hash: `00b4c495e246af12dfcb51f7044390b84edb1bc0`
-> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `a9a761a37adada42a9c745e780b42b6b21513af6`
+> Superchart git hash: `f51001b2d48690e8c34695b188f08eb8903b4430`
+> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `2b25f9fb8a65ffe338e571b1fd1580e328244e7f`
 > Do NOT explore source — use this doc instead.
 
 ## Package name & version
@@ -218,6 +218,14 @@ Also re-exports Superchart-specific types: `SuperchartOptions`, `SuperchartApi`,
 `BrandConfig`, `BrandOption`.
 `ExtractedDrawingTemplate`.
 
+Indicator type re-exports (new in `f51001b2` — types existed in `src/lib/types/indicator.ts`, now added to the package surface):
+`IndicatorCategory`, `IndicatorSubscribeParams`, `IndicatorSubscription`, `IndicatorDataHandler`,
+`IndicatorTickHandler`, `IndicatorDataPoint`, `IndicatorMetadata`, `IndicatorPlot`, `PlotLine`,
+`PlotHistogram`, `PlotHLine`, `PlotShape`, `PlotChar`, `PlotFill`, `PlotBgColor`, `PlotCandle`,
+`PlotArrow`, `PlotLineStyle`, `PlotShapeStyle`, `PlotShapeLocation`, `PlotShapeSize`,
+`IndicatorSettingDef`, `IndicatorSettingType`, `SettingValue`, `SettingOption`, `ActiveIndicator`
+(values unchanged — purely an export-surface fix; describe the shape of a custom `IndicatorProvider`).
+
 ## SuperchartOptions (constructor)
 
 ```typescript
@@ -353,7 +361,8 @@ Passed to `createDataLoader(datafeed)`. TradingView-compatible.
 interface Datafeed {
   onReady(callback: (config: DatafeedConfiguration) => void): void
   searchSymbols(userInput: string, exchange: string, symbolType: string,
-    onResult: (results: SearchSymbolResult[]) => void): void
+    onResult: (results: SearchSymbolResult[]) => void,
+    options?: { offset?: number, limit?: number }): void  // options NEW (2b25f9fb) — symbol-search modal passes offset for infinite scroll; backward-compatible
   resolveSymbol(symbolName: string,
     onResolve: (symbolInfo: LibrarySymbolInfo) => void,
     onError: (reason: string) => void): void
@@ -375,10 +384,17 @@ interface Datafeed {
 ```typescript
 interface SuperchartDataLoader extends DataLoader {
   searchSymbols(userInput: string, exchange: string, symbolType: string,
-    onResult: (results: SearchSymbolResult[]) => void): void
+    onResult: (results: SearchSymbolResult[]) => void,
+    options?: { offset?: number, limit?: number }): void  // options NEW (2b25f9fb)
   /** DatafeedConfiguration captured from Datafeed.onReady, or null if not yet fired. */
   getConfiguration(): DatafeedConfiguration | null
   setOnBarsLoaded(callback: (fromMs: number) => void): void
+
+  // NEW (f51001b2) — called automatically by `new Superchart(...)` right after it
+  // builds the instance's isolated ChartStore, to wire the loader's resolveSymbol
+  // precision bridge (see LibrarySymbolInfo note) into that store. Altrady does not
+  // call this directly.
+  attachStore(store: ChartStore): void
 
   // Used by ReplayEngine AND by setVisibleRange history-fetch (both pass countBack: 0).
   // Timestamps are unix ms. Optional — if absent, setVisibleRange skips backward
@@ -448,11 +464,19 @@ Predefined PERIODS constant:
 {
   ticker: string, name: string, type?: string, exchange?: string,
   timezone?: string, pricescale: number, minmov?: number,
+  volume_precision?: number,     // NEW (f51001b2) — decimal places, e.g. 0/3/8
   has_intraday?: boolean, has_daily?: boolean,
   supported_resolutions?: string[], session?: string,
   logo?: string, currency_code?: string
 }
 ```
+
+> **Precision sync (new in f51001b2).** `createDataLoader`'s `resolveSymbol` now
+> pushes `pricescale`→`pricePrecision` and `volume_precision`→`volumePrecision`
+> back into the chart's `SymbolInfo` on first resolve (`syncPrecisionToStore`),
+> **overriding** whatever precision was passed to `new Superchart()` at
+> construction. This is why a Datafeed's `resolveSymbol` result can now change the
+> y-axis precision live.
 
 ### DatafeedConfiguration
 ```typescript
@@ -566,6 +590,11 @@ interface StorageAdapter {
   deleteChartTemplate?(name: string): Promise<void>
   renameChartTemplate?(oldName: string, newName: string): Promise<void>     // atomic; SC falls back to load+save+delete if absent
   duplicateChartTemplate?(name: string, newName: string): Promise<void>     // atomic; SC falls back to load+save if absent
+
+  // Picker recents — MRU list for the emoji / icon overlay pickers (new in f51001b2).
+  // Both optional; if unimplemented SC keeps a non-persistent in-memory MRU list.
+  loadPickerRecents?(kind: 'emoji' | 'icon'): Promise<string[]>
+  savePickerRecents?(kind: 'emoji' | 'icon', items: string[]): Promise<void>
 }
 ```
 
@@ -604,7 +633,7 @@ interface LocalStorageAdapterOptions {
   storage?: Storage  // override for test / non-browser environments
 }
 ```
-Stores chart state at `${prefix}${key}`. Study templates at `${prefix}study-template:${name}`. Drawing templates at `${prefix}drawing-template:${toolName}:${name}`. Chart templates at `${prefix}chart-template:${name}`. Merges `SYSTEM_STUDY_TEMPLATES` / `SYSTEM_DRAWING_TEMPLATES` into list responses. Saving over a system name creates a user copy that shadows it; deleting a pure system name throws. Implements all template families including `list/load/save/delete/rename/duplicateChartTemplate`.
+Stores chart state at `${prefix}${key}`. Study templates at `${prefix}study-template:${name}`. Drawing templates at `${prefix}drawing-template:${toolName}:${name}`. Chart templates at `${prefix}chart-template:${name}`. Merges `SYSTEM_STUDY_TEMPLATES` / `SYSTEM_DRAWING_TEMPLATES` into list responses. Saving over a system name creates a user copy that shadows it; deleting a pure system name throws. Implements all template families including `list/load/save/delete/rename/duplicateChartTemplate`, plus `load/savePickerRecents` (new in f51001b2, stored at `${prefix}picker-recents:${kind}`).
 
 ### HttpStorageAdapter
 ```typescript
@@ -1208,9 +1237,43 @@ interface BoxProperties {
 Usage: 2 points (opposite corners). `totalStep: 3`. Right-click inside a non-ignored box
 calls `event.preventDefault()` to suppress the native context menu.
 
-### emojiMarker (storybook only)
-Single emoji at a point. Properties via `extendData`: `text` (emoji), `fontSize`, `color`.
-**Note:** This overlay is only in storybook helpers, not registered in coinray-chart.
+### Drawing-tool overlays (new in coinray-chart `2b25f9fb`)
+
+A batch of TV-style annotation/drawing overlays registered as `proExtensions` in
+coinray-chart, available through `chart.createOverlay({name: "...", ...})` like the
+primitives above. None export a TS interface — configure via `extendData` (same
+hand-documented pattern as the entries above). `totalStep` is klinecharts' internal
+point-count (clicks = `totalStep − 1`).
+
+| name | clicks | key `extendData` fields |
+|---|---|---|
+| `text` | 1 | `text, fontSize, textColor, fontWeight, align` |
+| `note` | 2 | `text, fontSize, textColor, fontWeight, fontFamily, lineColor, backgroundColor, borderColor, borderWidth` |
+| `callout` | 2 | `text, fontSize, textColor, fontWeight, fontFamily, backgroundColor, borderColor` + tail-attachment geometry |
+| `comment` | 1 | `text, fontSize, textColor, fontWeight, fontFamily, backgroundColor` |
+| `priceLabel` | 1 | `fontSize, textColor, fontWeight, fontFamily, backgroundColor, borderColor` |
+| `priceNote` | 2 | `lineText, fontSize, textColor, fontWeight, fontFamily, lineColor, backgroundColor, borderColor, borderWidth` |
+| `signpost` | 1 | `text, fontSize, textColor, fontWeight, fontFamily, backgroundColor, borderColor, borderWidth, emojiEnabled, emoji, emojiRingColor` (always-on x-axis date label) |
+| `flagMark` | 1 | `backgroundColor` |
+| `pin` | 1 | `backgroundColor, text, anchorDrawing` |
+| `table` | 1 (then resize) | `rows, cols, cells: string[][], colWidths: number[], rowHeights: number[], textAlign` |
+| `image` | 1 (drop-anywhere) | `src` (data URI), `opacity, width, height` — upload flow via internal `imageUploadTarget` store signal, not a public API |
+| `measure` | 2 | none persisted — self-removing, always created with `save: false` (TV-style drag-box price/percent/bar-count readout); internal use |
+
+> **`horizontalRayLine` is now single-click (breaking-ish, `2b25f9fb`).** `totalStep`
+> went `3 → 2`; direction (`'left' | 'right'`, default `'right'`) now comes from
+> `extendData.direction` instead of a second click. Any Altrady drawing-bar wiring that
+> assumed 2-click placement will now complete after one click.
+>
+> **Fibonacci label format flipped (`2b25f9fb` / SC `5a304c3`):** retracement / extension /
+> segment level labels render `"{pct}% ({price})"` (was `"{price} ({pct}%)"`).
+
+### emojiMarker (now a real overlay, `2b25f9fb`)
+Single emoji (or `'svg:<path>'` glyph) at a point. **Moved** from Superchart's storybook-only
+`src/lib/extension/emojiMarker.ts` into coinray-chart as a registered `proExtensions` overlay —
+it is now always available, and per-instance (previously properties were shared across overlays).
+`extendData`: `text` (unicode emoji or `'svg:<path>'`), `textFontSize` (was `fontSize`),
+`textColor` (was `color`). `totalStep: 2` (1 click).
 
 **Storybook helpers** (`overlay-stories/overlays/`) wrap the generic primitives with
 convenience builders (e.g. `alerts.ts`, `break-even.ts`, `price-time-select.ts`). These

@@ -1,7 +1,7 @@
 # crypto_base_scanner Reference
 
 > Source: `$CRYPTO_BASE_SCANNER_DIR` (branch: master)
-> Git hash: `37c17d580aeba623a875832bd6b0558e5a86e868`
+> Git hash: `797fb904631e6c68e7c644e4f32b32c115384cd5`
 > Do NOT explore source — use this doc instead.
 
 ## Overview
@@ -190,6 +190,72 @@ Limits: 30 for watchlists, 10 for others, 50 for enterprise.
 | PATCH | `/tradingview/drawing_templates/:id` | `name`, `template` | Update |
 | DELETE | `/tradingview/drawing_templates/:id` | — | Delete |
 
+### SuperChart Persistence (V3)
+
+`ApiV3::Superchart` (mounted at `/superchart`) — SuperChart layout, per-symbol drawings, indicator/drawing templates, and named layouts. Optimistic concurrency via `revision` / `expected_revision` (mismatch → 409). Empty layout/drawings return **200 with a null sentinel** (not 404).
+
+**Global layout** (single per account):
+
+| Method | Path | Params | Description |
+|--------|------|--------|-------------|
+| GET | `/superchart/layout` | — | Load layout state (null sentinel if none) |
+| PATCH | `/superchart/layout` | `state` (String, req), `expected_revision` (Integer, opt) | Save; unconditional if `expected_revision` omitted, else 409 on mismatch |
+| DELETE | `/superchart/layout` | — | Delete layout |
+
+**Per-symbol drawings** (keyed by `coinray_symbol`):
+
+| Method | Path | Params | Description |
+|--------|------|--------|-------------|
+| GET | `/superchart/drawings/:coinray_symbol` | — | Load overlays for symbol (null sentinel if none) |
+| PATCH | `/superchart/drawings/:coinray_symbol` | `overlays` (String, req), `expected_revision` (opt) | Save/create; 409 on revision mismatch |
+| DELETE | `/superchart/drawings/:coinray_symbol` | — | Delete overlays for symbol |
+
+**Indicator templates:**
+
+| Method | Path | Params | Description |
+|--------|------|--------|-------------|
+| GET | `/superchart/indicator_templates` | `indicator` (opt filter) | List |
+| GET | `/superchart/indicator_templates/:id` | — | Get one |
+| POST | `/superchart/indicator_templates` | `indicator`, `name`, `body` (all req) | Create |
+| PATCH | `/superchart/indicator_templates/:id` | `name`, `body` (opt) | Update |
+| DELETE | `/superchart/indicator_templates/:id` | — | Delete |
+
+**Drawing templates** (stored in `tradingview_drawing_templates` with `source: "sc"`):
+
+| Method | Path | Params | Description |
+|--------|------|--------|-------------|
+| GET | `/superchart/drawing_templates` | `tool` (opt filter) | List |
+| GET | `/superchart/drawing_templates/:id` | — | Get one |
+| POST | `/superchart/drawing_templates` | `tool`, `name`, `template` (all req) | Create |
+| PATCH | `/superchart/drawing_templates/:id` | `name`, `template` (opt) | Update |
+| DELETE | `/superchart/drawing_templates/:id` | — | Delete |
+
+**Named chart layouts** (multiple, savable presets):
+
+| Method | Path | Params | Description |
+|--------|------|--------|-------------|
+| GET | `/superchart/chart_layouts` | — | List metas (no body), newest first |
+| GET | `/superchart/chart_layouts/:id` | — | Get full body |
+| POST | `/superchart/chart_layouts` | `name`, `state` (req) | Create |
+| PATCH | `/superchart/chart_layouts/:id` | `name`, `state` (opt) | Update |
+| DELETE | `/superchart/chart_layouts/:id` | — | Delete |
+
+### AI Analysis (V3)
+
+`ApiV3::Ai` (mounted at `/ai`) — AI market analysis, cached per (symbol, timeframe bucket, preset).
+
+| Method | Path | Params | Description |
+|--------|------|--------|-------------|
+| GET | `/ai/analyse/presets` | — | Available analysis presets |
+| GET | `/ai/analyse/:id` | — | Fetch a stored analysis |
+| POST | `/ai/analyse` | `coinray_symbol`, `timeframe` (enum), `preset` (enum) | Run/return cached analysis |
+
+### App Version (V3, no auth)
+
+| Method | Path | Params | Description |
+|--------|------|--------|-------------|
+| GET | `/app_version/latest` | — | Latest published app version (unauthenticated) |
+
 ### Balances
 
 | Method | Path | Params | Description |
@@ -369,6 +435,23 @@ Limits: 30 for watchlists, 10 for others, 50 for enterprise.
 |--------|------|--------|-------------|
 | GET | `/futures/positions` | `exchange_api_key_id`, `coinray_symbol` | Futures positions |
 
+### Trading Journal (V3)
+
+`ApiV3::Journal` (mounted at `/journal`) — strategies, trade plans, dashboard, review queue, and positions. Dates are ISO `YYYY-MM-DD` in `account.timezone`; list filters share `from`, `to`, `quote_currency` (use `USD` for the mixed-quote view), `exchange_api_key_ids` (comma-separated).
+
+| Method | Path | Params | Description |
+|--------|------|--------|-------------|
+| GET | `/journal/dashboard` | + `position_types`, `strategy_ids` (comma-sep) | Aggregated journal dashboard |
+| GET | `/journal/positions` | + `status`, `limit` (≤1000, def 200), `offset`, `order_by`, `direction` | List journaled positions |
+| GET | `/journal/positions/counts` | (shared filters) | Counts per status |
+| PATCH | `/journal/positions/:id` | `strategy_id` (nullable), `reviewed` (Boolean) | Patch one; non-null strategy implies reviewed |
+| PATCH | `/journal/positions/bulk` | `ids` (Array[Integer], req), `strategy_id`, `reviewed` | Bulk patch |
+| GET | `/journal/review/positions` | paginated | Closed positions awaiting review |
+| POST | `/journal/review/positions/:id` | `status` (enum, req), `strategy_id`, `checklist` (JSON) | Set review status |
+| GET | `/journal/review/trade_plans` | paginated | Trade plans for review |
+| GET | `/journal/review/backtests` | paginated | Backtests for review |
+| — | `/journal/strategies`, `/journal/trade_plans` | | Strategies & trade plans (pre-existing) |
+
 ### Additional V3 Endpoints
 
 - `/base_scanner` — base scanner data
@@ -382,7 +465,7 @@ Limits: 30 for watchlists, 10 for others, 50 for enterprise.
 - `/quizzes` — quiz system
 - `/surveys` — user surveys
 - `/tutorials` — onboarding tutorials
-- `/journal` — trading journal (strategies, trade plans)
+- `/journal` — trading journal (see **Trading Journal** section)
 - `/paper_trading` — paper trading management
 - `/partners` — partner features
 - `/promotions` — active promotions

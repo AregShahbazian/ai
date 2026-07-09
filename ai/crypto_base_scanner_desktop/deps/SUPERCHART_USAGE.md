@@ -1,8 +1,8 @@
 # Superchart Usage Patterns
 
 > Source: `$SUPERCHART_DIR` (example app + source, branch: main)
-> Superchart git hash: `00b4c495e246af12dfcb51f7044390b84edb1bc0`
-> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `a9a761a37adada42a9c745e780b42b6b21513af6`
+> Superchart git hash: `f51001b2d48690e8c34695b188f08eb8903b4430`
+> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `2b25f9fb8a65ffe338e571b1fd1580e328244e7f`
 > Do NOT explore source — use this doc instead.
 
 ## Package rename (SC `474f052`)
@@ -899,3 +899,14 @@ menu action handlers in the controller.
 24. **`DatafeedConfiguration` fields are now snake_case** (ce4c809): `supportedResolutions` is now `supported_resolutions`; `symbolsTypes` is now `symbols_types`. Any `Datafeed.onReady` callback that passes the old camelCase keys will silently send `undefined` to SC (the symbol-search modal will have no exchange tabs or type filters). Update to the new names. See "BREAKING: DatafeedConfiguration Fields Renamed" section above.
 
 25. **`onUserOverlayRightClick` suppresses the built-in popup** (2954fe0): Providing this constructor option fully disables SC's native right-click context menu for user-drawn overlays. The consumer becomes responsible for all context-menu entries. Call `sc.openOverlaySettings(id)` to re-expose the Settings dialog, `sc.setOverlayLocked(id, true/false)` for lock/unlock, and `sc.getDrawingTemplate(id)` / `sc.applyDrawingTemplate(id, tpl)` for template operations. Per-overlay `onRightClick` handlers (from `createOverlay`) still win over this global option.
+
+26. **`resolveSymbol` now overrides construction-time precision** (f51001b2): The data
+    loader syncs `pricescale`→`pricePrecision` and the new `volume_precision`→`volumePrecision`
+    from the `LibrarySymbolInfo` back into the chart's `SymbolInfo` on first resolve. Whatever
+    precision was passed to `new Superchart()` is overwritten once `resolveSymbol` returns — set
+    `volume_precision`/`pricescale` in the datafeed if you want to control the y-axis precision.
+
+27. **`Datafeed.searchSymbols` gained an optional `options` arg** (2b25f9fb): signature is now
+    `searchSymbols(userInput, exchange, symbolType, onResult, options?: { offset?, limit? })`. The
+    symbol-search modal passes `offset` for infinite scroll. Backward-compatible — datafeeds that
+    ignore `options` still work, but paginate on `offset`/`limit` to support the modal's scroll.
