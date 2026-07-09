@@ -108,7 +108,31 @@ type text, click away, Ctrl+R → text restored. Table: edit two cells, click
 outside the table, reload → both cells restored. Image: upload, reload without
 resizing → image restored.
 
+## Follow-up: dot / arrow (same family) + cursor-group icons (2026-07-09)
+
+**dot (`circle`) and arrow inline text still lost** after the four fixes.
+Different sub-cause: `arrow.ts` / `circle.ts` are ProOverlays that read `text`
+from the closure `properties` Map (`props.text`) and render an `editableText`
+figure, but define **no `onTextChange` handler at all** — inline edits were
+never captured. And even if captured into the Map, `syncOverlay` doesn't read
+the ProOverlay Map (only live `extendData`). Fix: mirror `text.ts` — read text
+from `overlay.extendData` and add an `onTextChange` that writes it there
+(`packages/coinray-chart/src/extension/overlay/{arrow,circle}.ts`). Now the
+committed-text sync from fix #2 persists it, and restore reads it back.
+
+**Cursor-group icons didn't fit the tools**
+(`src/lib/widget/drawing-bar/icons/`):
+- cursor showed a star → now the mouse-pointer (`cursor: arrowMarker`).
+- arrow showed the mouse-pointer → now a real arrow (`iconKey: 'arrow'` →
+  `lineToolArrow`).
+- brush showed a nib-in-ring → now a pencil (new `pencil.tsx`, Material edit
+  glyph). Applied to both brush entries (cursor + trendline groups).
+
 ## Progress log
 
 - Investigation complete — root cause confirmed by two SC-source agents.
-- All four fixes implemented + typecheck/lint clean; left uncommitted for user test.
+- All four fixes implemented + typecheck/lint clean; committed
+  (submodule `101e2af7`, lib `81869b5`).
+- Measure-armed highlight: `e686f26`.
+- dot/arrow inline text + cursor-group icons: implemented, engine rebuilt,
+  typecheck/lint clean; left uncommitted for user test.
