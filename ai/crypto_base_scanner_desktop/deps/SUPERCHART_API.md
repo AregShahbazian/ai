@@ -1,8 +1,8 @@
 # Superchart API Reference
 
 > Source: `$SUPERCHART_DIR` (branch: main)
-> Superchart git hash: `f51001b2d48690e8c34695b188f08eb8903b4430`
-> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `2b25f9fb8a65ffe338e571b1fd1580e328244e7f`
+> Superchart git hash: `44be3f64d106dc7d83ec4b914392e3abfcb1b1f7`
+> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `174b32443ccb2543963d8b6ba9be80baefd857f6`
 > Do NOT explore source — use this doc instead.
 
 ## Package name & version
@@ -141,6 +141,17 @@ FIBONACCI_RETRACEMENT_LEVELS
 FIBONACCI_EXTENSION_LEVELS
 FIBONACCI_CIRCLE_LEVELS
 FIBONACCI_FAN_LEVELS
+// NOT exported: FIBONACCI_CHANNEL_LEVELS (new in coinray-chart 174b3244) — the default level
+// set `fibonacciLine` (Fibonacci Channel) now uses internally, replacing FIBONACCI_RETRACEMENT_LEVELS.
+// It exists in the engine but SC's barrel (src/lib/index.ts) was not updated to re-export it,
+// so `import { FIBONACCI_CHANNEL_LEVELS } from "superchart"` FAILS. SC API gap — ask upstream if needed.
+// FIBONACCI_CIRCLE_LEVELS / FIBONACCI_FAN_LEVELS are still exported but SC no longer uses them
+// internally (circle + fan moved to bespoke Style tabs) — stale but harmless, still importable.
+//
+// The default level sets were reworked in 174b3244: levels now carry a per-level `color`, and
+// 1.618 / 2.618 / 3.618 are ENABLED by default (previously disabled). The FigureLevel schema is
+// unchanged — only the default values. New fib overlays therefore render with more levels and
+// different colours than before unless you pass your own `figureLevels`.
 
 // Library version (new in 17dc259)
 version                 — () => string, returns bundled SC version (e.g. "0.1.0")
@@ -693,6 +704,13 @@ interface ChartPreferences {
 }
 ```
 
+> **Magnet snap rewritten (coinray-chart `174b3244` — ALTD-1898).** No type or config-key change —
+> `magnetMode` values are the same. The snap *algorithm* changed: it now picks the nearest of
+> {open, high, low, close} by **pixel distance**. `strong` always snaps; `weak` only snaps within
+> `Overlay.modeSensitivity`, whose default went **8px → 60px** (a much wider, more forgiving halo).
+> The old asymmetric behaviour (hard-snap anywhere inside the candle body regardless of mode) is gone.
+> Feel-only change — no code action needed unless you read or hardcode `modeSensitivity`.
+
 ### SavedIndicator
 ```typescript
 interface SavedIndicator {
@@ -783,6 +801,41 @@ A `ChartTemplate` is a complete snapshot of a chart (TV "Chart Layout" semantics
   textPaddingLeft/Right/Top/Bottom, lineColor, lineWidth, lineStyle, lineLength,
   lineDashedValue, tooltip, backgroundColor, borderStyle, borderColor, borderWidth }
 ```
+
+### OverlayTextChangeEvent (`committed` new in coinray-chart `174b3244`)
+Fired by the engine while the user inline-edits text on a text-bearing overlay
+(`text`, `note`, `callout`, `comment`, `priceNote`, `signpost`, `pin`, `table` cells,
+and — new in `174b3244` — `arrow` and `circle`).
+
+```typescript
+interface OverlayTextChangeEvent<E> {
+  overlay: Overlay<E>
+  chart: Chart
+  text: string
+  committed: boolean   // NEW in 174b3244
+}
+```
+
+`committed: false` fires on **every keystroke** (live re-render); `committed: true` fires
+once on blur/Escape (edit finalised). **Anything that persists or reacts expensively must
+gate on `committed === true`** or it will run on every keypress.
+
+**There is no `SuperchartApi` callback for this event.** `Superchart` exposes no
+`onOverlayTextChange` method or constructor option. The only way to receive it is the generic
+engine hook — pass your own `onTextChange` in the object handed to `createOverlay()`:
+
+```typescript
+sc.createOverlay({
+  name: "note",
+  points: [...],
+  onTextChange: (e: OverlayTextChangeEvent) => { if (e.committed) persist(e.text) },
+})
+```
+
+SC's own `useChartState` consumes the hook internally (chains it, then syncs to storage on
+`committed`) and does **not** forward it. Net effect: inline overlay text now survives a
+reload, where before it silently reverted. Altrady doesn't use `onTextChange` today — this
+is informational, not a required migration.
 
 ### IndicatorProvider
 ```typescript
@@ -1092,6 +1145,10 @@ removeOverlay(filter?: OverlayFilter): boolean
 //   Generic primitives (pro): priceLevelLine, timeLine, styledSegment, box
 // OverlayCreate: { name, points: [{timestamp, value}], styles?, extendData?, lock?, visible?, ... }
 
+// Panes
+getPaneOptions(): PaneOptions[]                    // includes the 'x_axis_pane' entry
+setPaneOptions(options: PaneOptions): void         // PaneOptions: { id, state?: 'normal'|'maximize'|'minimize', height?, ... }
+
 // Coordinate conversion
 convertToPixel(points, filter?): Partial<Coordinate> | Array<...>
 convertFromPixel(coordinates, filter?): Partial<Point> | Array<...>
@@ -1141,6 +1198,21 @@ Resolution → Period:
 | PeriodParams.from/to | seconds |
 | HistoryMetadata.nextTime | seconds |
 | VisibleTimeRange.from/to | seconds |
+
+## Small-price fold notation (coinray-chart `174b3244` — ALTD-1896)
+
+`formatFoldDecimal` (the engine's compact rendering of tiny prices on axis labels, tooltips and
+overlay labels) changed its **output string shape**:
+
+| | example input | old output | new output |
+|---|---|---|---|
+| leading `0` dropped | `0.00012` | `0.0{3}12` | `0.{4}12` |
+| trailing zeros trimmed | `0.00012000` | `0.0{3}1200` | `0.{4}12` |
+
+So the notation is now `0.{n}sig` (was `0.0{n}sig`), and the significand no longer carries
+trailing zeros. **Breaking for any code that regex-parses SC's folded-price display strings**
+(e.g. a custom price-label renderer or a screenshot/text assertion). Altrady does not parse these
+strings — grep for `formatFoldDecimal` / fold-notation regexes found nothing — so we're unaffected.
 
 ## New Built-in Overlay Types
 
@@ -1267,6 +1339,36 @@ point-count (clicks = `totalStep − 1`).
 >
 > **Fibonacci label format flipped (`2b25f9fb` / SC `5a304c3`):** retracement / extension /
 > segment level labels render `"{pct}% ({price})"` (was `"{price} ({pct}%)"`).
+
+### Fibonacci family rework (coinray-chart `174b3244` — ALTD-1894)
+
+The whole fib family was reworked for TV parity. No overlay **names** were added, removed or
+renamed, so the registry and any `createOverlay({name: "fibonacci…"})` call still resolves —
+but geometry, defaults and click-counts changed:
+
+> **`fibonacciLine` ("Fibonacci Channel") is now 3-click (was 2).** `totalStep` went `3 → 4`.
+> Backward-safe, not a crash: an overlay persisted with only 2 points renders just the diagonal
+> line and no channel bands until a 3rd point is added (`if (coordinates.length < 3) return figures`).
+> **Anything that creates `fibonacciLine` programmatically with 2 points now draws an incomplete
+> overlay.** Altrady's MCP chart-bridge lists `fibonacciLine` as a valid name but never constructs
+> one (it maps canonical `fib_retracement` → `fibonacciSegment`), so we are not affected today.
+
+- `fibonacciCircle` — circle → **ellipse**, √2-based geometry, trendline defaults, bespoke Style tab.
+- `fibonacciSpiral` — now a true **log spiral**; `counterclockwise` direction flag.
+- `fibonacciSpeedResistanceFan` — bespoke geometry rewrite + separate `fanPriceLevels` /
+  `fanTimeLevels`, bespoke Style tab.
+- `fibonacciSegment` / `fibonacciExtension` — retracement-first ordering, colour cascade, alpha norm.
+- Line-based fibs gained shared defaults parity: colours, background fill, label toggles.
+
+**New `extendData` keys** (persisted) on the reworked fibs — SC's `EXTEND_DATA_PROPERTY_KEYS` grew:
+`diagonalWidth`, `diagonalStyle`, `diagonalDashedValue`, `counterclockwise`, `fanPriceLevels`,
+`fanTimeLevels`, `showLeftLabels`, `showRightLabels`, `showTopLabels`, `showBottomLabels`,
+`showGrid`, `gridColor`. The `SavedOverlay` shape is unchanged (`{ properties, extendData, … }`) —
+older saved states simply lack these keys and fall back to defaults. No migration needed.
+
+> **`arrow` and `circle` now persist inline text.** Their inline-edited text is written into
+> `extendData.text` (previously it lived only in a volatile in-memory properties Map and was lost
+> on reload). Persisted `extendData` for these two types may now carry a `text` key it never had before.
 
 ### emojiMarker (now a real overlay, `2b25f9fb`)
 Single emoji (or `'svg:<path>'` glyph) at a point. **Moved** from Superchart's storybook-only

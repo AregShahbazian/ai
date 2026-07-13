@@ -1,8 +1,8 @@
 # Superchart Usage Patterns
 
 > Source: `$SUPERCHART_DIR` (example app + source, branch: main)
-> Superchart git hash: `f51001b2d48690e8c34695b188f08eb8903b4430`
-> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `2b25f9fb8a65ffe338e571b1fd1580e328244e7f`
+> Superchart git hash: `44be3f64d106dc7d83ec4b914392e3abfcb1b1f7`
+> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `174b32443ccb2543963d8b6ba9be80baefd857f6`
 > Do NOT explore source — use this doc instead.
 
 ## Package rename (SC `474f052`)
@@ -910,3 +910,31 @@ menu action handlers in the controller.
     `searchSymbols(userInput, exchange, symbolType, onResult, options?: { offset?, limit? })`. The
     symbol-search modal passes `offset` for infinite scroll. Backward-compatible — datafeeds that
     ignore `options` still work, but paginate on `offset`/`limit` to support the modal's scroll.
+
+28. **Double-clicking a pane now maximizes/restores it** (SC `44be3f64` — ALTD-1904): SC registers
+    its **own internal** `onChartDoubleClick` listener that toggles the double-clicked pane between
+    `state: 'maximize'` and `'normal'` (via `chart.setPaneOptions`). It skips `x_axis_pane` and
+    no-ops when there is only one non-x-axis pane. **This is automatic, has no opt-out flag, and is
+    not a new public method.** Your own `onDoubleSelect` / `onChartDoubleClick` callback still fires
+    exactly as before — SC's listener is *additional*, not a replacement. Practical consequence: on a
+    multi-pane chart (price + volume/RSI), a user double-click now resizes panes. If a pane suddenly
+    goes full-height in Altrady, **that is SC, not our bug** — don't hunt through our layout code.
+
+29. **Inline overlay text now persists across reload** (coinray-chart `174b3244` — ALTD-1766): text
+    typed into `text` / `note` / `callout` / `comment` / `priceNote` / `signpost` / `pin` / `table`
+    cells — and now `arrow` / `circle` too — is written to `extendData.text` and survives a reload.
+    Previously it rendered live but silently reverted. Bug fix, no API change. If you ever subscribe
+    to the engine's `onTextChange` hook yourself (only reachable by passing it to `createOverlay()` —
+    there is no `SuperchartApi` callback for it), **gate on the new `event.committed === true`**:
+    `committed: false` fires on every keystroke, `true` once on blur/Escape. Persisting without the
+    gate writes on every keypress.
+
+30. **Fib overlays reworked, and `fibonacciLine` is now 3-click** (coinray-chart `174b3244` —
+    ALTD-1894): no overlay names were added/removed/renamed, so existing `createOverlay` calls still
+    resolve — but `fibonacciLine` ("Fibonacci Channel") went from 2 clicks to 3 (`totalStep 3 → 4`).
+    A `fibonacciLine` created programmatically with only 2 points now renders just the diagonal, no
+    channel bands (degrades gracefully, doesn't crash). Fib defaults also changed: per-level colours,
+    and 1.618/2.618/3.618 enabled by default. Altrady maps `fib_retracement` → `fibonacciSegment` and
+    never constructs a `fibonacciLine`, so we're clear today — but check this before adding one.
+    Note `FIBONACCI_CHANNEL_LEVELS` (its new default level set) is **not** re-exported from the
+    `superchart` barrel, so you cannot import it; the other `FIBONACCI_*_LEVELS` still are.
