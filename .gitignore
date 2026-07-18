@@ -35,3 +35,14 @@
 !/.claude/projects/-home-areg/
 /.claude/projects/-home-areg/*
 !/.claude/projects/-home-areg/memory/
+
+# VLC lua interface scripts (e.g. rotate hotkey)
+!/.local/
+/.local/*
+!/.local/share/
+/.local/share/*
+!/.local/share/vlc/
+/.local/share/vlc/*
+!/.local/share/vlc/lua/
+/.local/share/vlc/lua/*
+!/.local/share/vlc/lua/intf/
