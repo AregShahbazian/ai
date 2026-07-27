@@ -23,10 +23,16 @@ local function msleep(ms) vlc.misc.mwait(vlc.misc.mdate() + ms * 1000) end
 local angle = 0
 local osd_channel = nil
 
+-- transform (unlike rotate) swaps the output canvas dimensions, so the full
+-- picture always fits — no cropping. transform type=90 is clockwise; the old
+-- rotate{angle=90} turned counter-clockwise, so map 90→270 / 270→90 to keep
+-- the same visual direction.
+local TRANSFORM = { [90] = "270", [180] = "180", [270] = "90" }
+
 local function apply_rotation()
   local vout = vlc.object.vout()
   if not vout then return end
-  local filter = (angle == 0) and "" or ("rotate{angle=" .. angle .. "}")
+  local filter = (angle == 0) and "" or ("transform{type=" .. TRANSFORM[angle] .. "}")
   vlc.var.set(vout, "video-filter", filter)
   pcall(function()
     osd_channel = osd_channel or vlc.osd.channel_register()
