@@ -49,6 +49,10 @@ was changed.
   remind me that `git worktree add <path> [-b <branch>]` lets each branch/agent
   work in its own directory off the same `.git`. Don't entangle the two lines of
   work in one tree.
+- **Worktrees always live in `~/git/worktrees/`.** Never as a sibling of the repo
+  and never in a temp dir. Name them `<repo>-<branch-or-purpose>`, e.g.
+  `~/git/worktrees/Superchart-main`. Remove with `git worktree remove <path>`
+  when the comparison/task is done.
 - **Stage new files at creation.** Any file meant to be kept should be staged
   immediately when created — don't leave workflow docs or other intentional files
   in an untracked/unstaged state.
