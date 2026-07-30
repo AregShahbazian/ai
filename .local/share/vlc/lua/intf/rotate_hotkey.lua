@@ -1,9 +1,13 @@
 --[[
-rotate_hotkey.lua — cycle video rotation in 90° steps with a hotkey.
+rotate_hotkey.lua — video rotate + mirror hotkeys.
 
 VLC's hotkey system cannot trigger video filters, and VLC 3.x removed the
 lua var.add_callback API, so this script polls the libvlc "key-pressed"
 variable instead.
+
+Only one lua interface can run at a time, so both hotkeys live in this one
+script (they also share the single "video-filter" variable, which must be
+written as one combined filter chain).
 
 Install:   ~/.local/share/vlc/lua/intf/rotate_hotkey.lua
 Enable:    Tools > Preferences > (Show settings: All) > Interface > Main interfaces
@@ -11,16 +15,19 @@ Enable:    Tools > Preferences > (Show settings: All) > Interface > Main interfa
            then under Main interfaces > Lua:
              - Lua interface: rotate_hotkey
            ...or run:  vlc --extraintf luaintf --lua-intf rotate_hotkey
-Key:       press  y  in the VLC window to rotate +90° (cycles back to 0°).
-           Change KEY below to any plain character to rebind.
+Keys:      y  rotate +90° (cycles back to 0°)
+           u  toggle horizontal mirror (flip left/right)
+           Change ROTATE_KEY / MIRROR_KEY below to any plain character to rebind.
 ]]
 
-local KEY = string.byte("y")  -- VLC keycode of a plain ASCII key == its codepoint
+local ROTATE_KEY = string.byte("y")  -- VLC keycode of a plain ASCII key == its codepoint
+local MIRROR_KEY = string.byte("u")
 local STEP = 90
 
 local function msleep(ms) vlc.misc.mwait(vlc.misc.mdate() + ms * 1000) end
 
 local angle = 0
+local mirrored = false
 local osd_channel = nil
 
 -- transform (unlike rotate) swaps the output canvas dimensions, so the full
@@ -29,29 +36,41 @@ local osd_channel = nil
 -- the same visual direction.
 local TRANSFORM = { [90] = "270", [180] = "180", [270] = "90" }
 
-local function apply_rotation()
-  local vout = vlc.object.vout()
-  if not vout then return end
-  local filter = (angle == 0) and "" or ("transform{type=" .. TRANSFORM[angle] .. "}")
-  vlc.var.set(vout, "video-filter", filter)
+local function osd(text)
   pcall(function()
     osd_channel = osd_channel or vlc.osd.channel_register()
-    vlc.osd.message("Rotation: " .. angle .. "\xc2\xb0", osd_channel, "top-right", 1200000)
+    vlc.osd.message(text, osd_channel, "top-right", 1200000)
   end)
-  vlc.msg.info("[rotate_hotkey] rotation set to " .. angle)
+end
+
+local function apply_filters()
+  local vout = vlc.object.vout()
+  if not vout then return end
+  local chain = {}
+  if angle ~= 0 then chain[#chain + 1] = "transform{type=" .. TRANSFORM[angle] .. "}" end
+  -- hflip goes last so it mirrors the image as displayed, after any rotation
+  if mirrored then chain[#chain + 1] = "transform{type=hflip}" end
+  vlc.var.set(vout, "video-filter", table.concat(chain, ":"))
+  vlc.msg.info("[rotate_hotkey] angle=" .. angle .. " mirrored=" .. tostring(mirrored))
 end
 
 local libvlc = vlc.object.libvlc()
 pcall(vlc.var.set, libvlc, "key-pressed", 0)
-vlc.msg.info("[rotate_hotkey] active, key code " .. KEY)
+vlc.msg.info("[rotate_hotkey] active, rotate=" .. ROTATE_KEY .. " mirror=" .. MIRROR_KEY)
 
 while true do
   local ok, key = pcall(vlc.var.get, libvlc, "key-pressed")
-  if ok and key == KEY then
+  if ok and (key == ROTATE_KEY or key == MIRROR_KEY) then
     -- clear so an immediate repeat press of the same key is detected
     pcall(vlc.var.set, libvlc, "key-pressed", 0)
-    angle = (angle + STEP) % 360
-    apply_rotation()
+    if key == ROTATE_KEY then
+      angle = (angle + STEP) % 360
+      osd("Rotation: " .. angle .. "\xc2\xb0")
+    else
+      mirrored = not mirrored
+      osd("Mirror: " .. (mirrored and "on" or "off"))
+    end
+    apply_filters()
   end
   msleep(50)
 end
