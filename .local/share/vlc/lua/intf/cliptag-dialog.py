@@ -37,8 +37,11 @@ Prints one line for the lua side to show as OSD:
 (anything else = error, see stderr)
 
 Db shape: { "clips":  { "<path relative to root>":
-                          { "tags": [...], "series": "<title>" } },
+                          { "tags": [...], "series": "<title>",
+                            "notes": "<free text>" } },
             "series": { "<title>": { "tags": [...] } } }
+Clip notes: free-text area at the bottom of the tags dialog; tab moves
+between it and the tag list, saved with enter (from the list).
 A clip's "series" link (max 1) is set by applying a series in the tags
 dialog; it survives tag edits, and follows series renames/deletes.
 """
@@ -398,12 +401,24 @@ def tags_dialog(root, db_path, clip):
     create_btn.set_tooltip_text("new series from this clip's checked tags, and link the clip to it (ctrl+s)")
     actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
     actions.pack_end(create_btn, False, False, 0)
+    notes_lbl = Gtk.Label(label="notes (tab = enter/leave)", xalign=0)
+    notes_lbl.get_style_context().add_class("dim-label")
+    notes_view = Gtk.TextView()
+    notes_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+    notes_view.get_buffer().set_text(entry.get("notes", ""))
+    notes_frame = Gtk.Frame()
+    notes_scroller = Gtk.ScrolledWindow()
+    notes_scroller.set_size_request(-1, 70)
+    notes_scroller.add(notes_view)
+    notes_frame.add(notes_scroller)
     box.pack_start(name_lbl, False, False, 0)
     box.pack_start(picker.widget, True, True, 0)
     box.pack_start(actions, False, False, 0)
+    box.pack_start(notes_lbl, False, False, 0)
+    box.pack_start(notes_frame, False, False, 0)
     box.pack_start(hint, False, False, 0)
 
-    result = {"tags": None}
+    result = {"tags": None, "notes": ""}
 
     def create_series(*a):
         title = prompt_text(win, "Create series",
@@ -423,8 +438,18 @@ def tags_dialog(root, db_path, clip):
         ctrl = event.state & Gdk.ModifierType.CONTROL_MASK
         if event.keyval == Gdk.KEY_Escape:
             Gtk.main_quit()
+        elif notes_view.has_focus():
+            # typing belongs to the notes textarea; tab returns to the list
+            if event.keyval in (Gdk.KEY_Tab, Gdk.KEY_ISO_Left_Tab):
+                win.set_focus(None)
+                return True
+            return False
+        elif event.keyval in (Gdk.KEY_Tab, Gdk.KEY_ISO_Left_Tab):
+            notes_view.grab_focus()
         elif event.keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
             result["tags"] = picker.checked_tags()
+            buf = notes_view.get_buffer()
+            result["notes"] = buf.get_text(buf.get_start_iter(), buf.get_end_iter(), True)
             Gtk.main_quit()
         elif ctrl and event.keyval in (Gdk.KEY_s, Gdk.KEY_S):
             create_series()
@@ -439,6 +464,11 @@ def tags_dialog(root, db_path, clip):
         print("CANCELLED")
         return
     entry["tags"] = result["tags"]
+    notes = result["notes"].strip()
+    if notes:
+        entry["notes"] = notes
+    else:
+        entry.pop("notes", None)
     if picker.applied_series:
         entry["series"] = picker.applied_series
     save_db(db_path, db)
@@ -461,7 +491,7 @@ def series_dialog(root, db_path):
         b = buttons[label] = Gtk.Button(label=label)
         b.set_can_focus(False)
         top.pack_start(b, False, False, 0)
-    placeholder = Gtk.Label(label="no series yet — ctrl+n (or New) to create one")
+    placeholder = Gtk.Label(label="select a series (←→ or dropdown) · ctrl+n (or New) to create one")
     placeholder.set_no_show_all(True)  # visibility managed by load_series
     picker_slot = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
     box.pack_start(top, False, False, 0)
@@ -592,8 +622,8 @@ def series_dialog(root, db_path):
         return True
 
     win.connect("key-press-event", on_key)
-    refresh_combo(sorted(series)[0] if series else None)
-    load_series(sorted(series)[0] if series else None)
+    refresh_combo(None)  # open blank — no series preselected
+    load_series(None)
     run_main(win)
     print("DONE")
 
