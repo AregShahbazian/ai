@@ -605,15 +605,18 @@ class TagPicker:
             group.set_visible(
                 any(self._matches(r) for r in group.get_children()))
         self._relayout()
-        rows = self._selectable_rows()
-        self._select(rows[0] if rows else None)
+        # nothing selected by default — ↓ enters the list at the top
+        self._select(None)
 
     def move(self, delta):
         rows = self._selectable_rows()
         if not rows:
             return
         sel = self.selected_row()
-        i = rows.index(sel) if sel in rows else 0
+        if sel not in rows:  # first arrow press enters the list at the top
+            self._select(rows[0])
+            return
+        i = rows.index(sel)
         self._select(rows[max(0, min(len(rows) - 1, i + delta))])
 
     def toggle(self):
