@@ -28,8 +28,9 @@ tags mode:   check-list of <root>/tags.txt with the clip's current tags
              confirm) buttons — both rewrite tags.txt AND refactor all
              references in the db (clip tags, series tags); rename merges
              if the target name already exists (works in both dialogs).
-             Series show as pinned "⚡ title" rows — space or double-click
-             toggles the series on the clip: link it and check its tags,
+             Series show as pinned "⚡ title" rows with a link/unlink
+             button at the right (space does the same when the row is
+             selected): link the series to the clip and check its tags,
              or, if it is the linked one, delink and uncheck its tags.
              While a series is linked, each tag row shows a "→⚡" button
              (ctrl+a = selected row) that pushes that tag's on/off state
@@ -391,7 +392,6 @@ class TagPicker:
         group.set_filter_func(lambda row, *a: self._matches(row))
         group.connect("row-selected", self._on_row_selected)
         group.set_activate_on_single_click(False)  # single click only selects
-        group.connect("row-activated", self._on_row_activated)  # double-click
         group.set_halign(Gtk.Align.CENTER)  # centered in its column slot
         group.set_valign(Gtk.Align.START)   # never taller than it needs
         self._groups.append(group)
@@ -445,13 +445,6 @@ class TagPicker:
             self._rows.insert(rows_index, row)
         return row
 
-    def _on_row_activated(self, group, row):
-        # row-activated fires on double-click (single click just selects)
-        if row.kind == "series":
-            self._toggle_series(row)
-            self.set_query("")
-            self._select(row)
-
     def _on_row_selected(self, group, row):
         # mouse clicks land here; keep at most one selected row across groups
         if row is None or getattr(self, "_sel_guard", False):
@@ -482,10 +475,24 @@ class TagPicker:
     def _add_series_row(self, title, tags, rows_index=None):
         lbl = Gtk.Label(label=self._series_label(title), xalign=0)
         lbl.get_style_context().add_class("dim-label")
-        row = self._add_row(lbl, "series", title, self._series_group, rows_index)
+        toggle_btn = Gtk.Button()
+        self._compact(toggle_btn)
+        toggle_btn.set_tooltip_text(
+            "link this series to the clip and check its tags / unlink and uncheck them")
+        child = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        child.pack_start(lbl, True, True, 0)
+        child.pack_end(toggle_btn, False, False, 0)
+        row = self._add_row(child, "series", title, self._series_group, rows_index)
         row.series_tags = list(tags)
         row.lbl = lbl
+        row.toggle_btn = toggle_btn
+        toggle_btn.set_label(self._series_btn_label(title))
+        toggle_btn.connect("clicked", lambda *a: self._toggle_series(row))
         return row
+
+    def _series_btn_label(self, title):
+        linked = self.applied_series or self.linked_series
+        return "✕" if title == linked else "🔗"
 
     def _compact(self, btn):
         # strip the theme's button padding so the row keeps its height
@@ -675,6 +682,7 @@ class TagPicker:
         for r in self._rows:
             if r.kind == "series":
                 r.lbl.set_text(self._series_label(r.tag))
+                r.toggle_btn.set_label(self._series_btn_label(r.tag))
 
     def apply_new_series(self, title, tags):
         """Add (or find) a ⚡ row for a just-created series and mark it applied."""
