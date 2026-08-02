@@ -23,6 +23,9 @@ tags mode:   check-list of <root>/tags.txt with the clip's current tags
              same-depth rows down to the next label) filters with them.
              Series show as pinned "⚡ title" rows — space on one
              toggles-on all its tags (one-time template apply).
+             While a series is linked, each tag row shows a "→⚡" button
+             (ctrl+a = selected row) that pushes that tag's on/off state
+             into the linked series without opening the series dialog.
 series mode: CRUD editor for root-wide series (named tag templates):
              selector + new/rename/delete, and the same tag picker editing
              the selected series' tags.
@@ -135,8 +138,11 @@ def relink_series(db, old, new):
 class TagPicker:
     """Filterable check-list widget; all keys arrive via handle_key()."""
 
-    def __init__(self, tags, checked, series=None, linked_series=None):
+    _compact_css = None  # shared provider for padding-free row buttons
+
+    def __init__(self, tags, checked, series=None, linked_series=None, on_apply=None):
         self.query = ""
+        self.on_apply = on_apply  # callback(tag, active): per-row "apply to series"
         self.applied_series = None  # series applied this session (max 1, last wins)
         self.linked_series = linked_series  # series already stored on the clip
         self._bs_start = self._bs_last = None  # backspace press/hold tracking
@@ -234,8 +240,31 @@ class TagPicker:
         check.set_active(active)
         check.set_can_focus(False)  # all keys are handled at the window level
         check.set_margin_start(24 * depth)
-        row = self._add_row(check, "tag", tag)
+        child = check
+        apply_btn = None
+        if self.on_apply:
+            apply_btn = Gtk.Button(label="→⚡")
+            apply_btn.set_can_focus(False)
+            apply_btn.set_relief(Gtk.ReliefStyle.NONE)
+            apply_btn.set_valign(Gtk.Align.CENTER)
+            # strip the theme's button padding so the row keeps its height
+            if TagPicker._compact_css is None:
+                TagPicker._compact_css = Gtk.CssProvider()
+                TagPicker._compact_css.load_from_data(
+                    b"button { padding: 0px 6px; min-height: 0px; }")
+            apply_btn.get_style_context().add_provider(
+                TagPicker._compact_css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            apply_btn.set_no_show_all(True)  # shown only while a series is linked
+            apply_btn.set_tooltip_text(
+                "apply this tag's on/off state to the clip's series (ctrl+a = selected row)")
+            apply_btn.connect("clicked",
+                              lambda *a: self.on_apply(tag, check.get_active()))
+            child = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+            child.pack_start(check, True, True, 0)
+            child.pack_end(apply_btn, False, False, 0)
+        row = self._add_row(child, "tag", tag)
         row.check = check
+        row.apply_btn = apply_btn
         row.depth = depth
         row.ancestors = [a.lower() for a in (ancestors or [])]
 
@@ -310,6 +339,16 @@ class TagPicker:
         self.applied_series = title
         self._refresh_series_labels()
 
+    def set_apply_buttons_visible(self, visible):
+        for r in self.listbox.get_children():
+            if getattr(r, "apply_btn", None):
+                r.apply_btn.set_visible(visible)
+
+    def update_series_tags(self, title, tags):
+        for r in self.listbox.get_children():
+            if r.kind == "series" and r.tag == title:
+                r.series_tags = list(tags)
+
     def check_tags(self, tags):
         have = {r.tag: r for r in self.listbox.get_children() if r.kind == "tag"}
         for tag in tags:
@@ -364,6 +403,7 @@ def make_window(title, hint_text):
     display = Gdk.Display.get_default()
     monitor = display.get_primary_monitor() or display.get_monitor(0)
     win.set_default_size(420, int(monitor.get_geometry().height * 0.95))
+    Gtk.Widget.set_opacity(win, 0.8)  # keep the video visible behind the dialog
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
     box.set_border_width(10)
     win.add(box)
@@ -395,7 +435,25 @@ def tags_dialog(root, db_path, clip):
     win, box, hint = make_window("Clip Tags", HINT_PICKER + "\n⚡ rows are series: space applies their tags + links the clip (✓)")
     name_lbl = Gtk.Label(label=os.path.basename(clip))
     name_lbl.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
-    picker = TagPicker(options, current, db.get("series", {}), entry.get("series"))
+    def apply_tag_to_series(tag, active):
+        title = picker.applied_series or entry.get("series")
+        if not title or title not in db.get("series", {}):
+            return
+        stags = db["series"][title].setdefault("tags", [])
+        if active and tag not in stags:
+            stags.append(tag)
+        elif not active and tag in stags:
+            stags.remove(tag)
+        save_db(db_path, db)
+        picker.update_series_tags(title, stags)  # keep the ⚡ row's apply fresh
+
+    picker = TagPicker(options, current, db.get("series", {}), entry.get("series"),
+                       on_apply=apply_tag_to_series)
+
+    def sync_apply_buttons():
+        picker.set_apply_buttons_visible(
+            bool(picker.applied_series or entry.get("series")))
+
     create_btn = Gtk.Button(label="Create series")
     create_btn.set_can_focus(False)
     create_btn.set_tooltip_text("new series from this clip's checked tags, and link the clip to it (ctrl+s)")
@@ -431,6 +489,7 @@ def tags_dialog(root, db_path, clip):
         entry["series"] = title  # overwrites a previously assigned series
         save_db(db_path, db)
         picker.apply_new_series(title, db["series"][title]["tags"])
+        sync_apply_buttons()
 
     create_btn.connect("clicked", create_series)
 
@@ -453,11 +512,18 @@ def tags_dialog(root, db_path, clip):
             Gtk.main_quit()
         elif ctrl and event.keyval in (Gdk.KEY_s, Gdk.KEY_S):
             create_series()
+        elif ctrl and event.keyval in (Gdk.KEY_a, Gdk.KEY_A):
+            row = picker.listbox.get_selected_row()
+            if row and row.kind == "tag":
+                apply_tag_to_series(row.tag, row.check.get_active())
         else:
-            return picker.handle_key(event)
+            handled = picker.handle_key(event)
+            sync_apply_buttons()  # applying a series row links the clip
+            return handled
         return True
 
     win.connect("key-press-event", on_key)
+    sync_apply_buttons()
     run_main(win)
 
     if result["tags"] is None:
