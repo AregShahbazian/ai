@@ -17,12 +17,36 @@ Enable:    Tools > Preferences > (Show settings: All) > Interface > Main interfa
            ...or run:  vlc --extraintf luaintf --lua-intf rotate_hotkey
 Keys:      y  rotate +90° (cycles back to 0°)
            u  toggle horizontal mirror (flip left/right)
-           Change ROTATE_KEY / MIRROR_KEY below to any plain character to rebind.
+           t  clip tagger: tags dialog       (only when CLIPTAG_ROOT env is set)
+           i  clip tagger: attributes dialog (only when CLIPTAG_ROOT env is set)
+           Change the *_KEY constants below to any plain character to rebind.
+
+The clip-tagger keys are inert in normal VLC sessions; they activate only when
+VLC is started via a launcher script that exports CLIPTAG_ROOT / CLIPTAG_DB
+(copy launch-tagger.template.sh, in this folder, into a clips root as
+launch-tagger.sh). Dialogs are external zenity
+windows, since VLC hotkeys can't reach lua extension dialogs.
 ]]
 
 local ROTATE_KEY = string.byte("y")  -- VLC keycode of a plain ASCII key == its codepoint
 local MIRROR_KEY = string.byte("u")
+local TAGS_KEY   = string.byte("t")
+local ATTRS_KEY  = string.byte("i")
 local STEP = 90
+
+local CLIPTAG_ROOT = os.getenv("CLIPTAG_ROOT")
+local CLIPTAG_DB   = os.getenv("CLIPTAG_DB")
+
+local function sh_quote(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
+
+-- Dummy dialogs for now: just prove the hotkey → dialog → env-var plumbing.
+-- os.execute blocks only this lua thread; playback keeps running.
+local function tag_dialog(kind)
+  local text = "Root: " .. CLIPTAG_ROOT .. "\\nDB: " .. tostring(CLIPTAG_DB)
+  local rc = os.execute("zenity --info --title=" .. sh_quote("Clip " .. kind)
+    .. " --text=" .. sh_quote(text) .. " 2>>/tmp/cliptag-zenity.err")
+  vlc.msg.info("[rotate_hotkey] zenity rc=" .. tostring(rc))
+end
 
 local function msleep(ms) vlc.misc.mwait(vlc.misc.mdate() + ms * 1000) end
 
@@ -56,7 +80,14 @@ end
 
 local libvlc = vlc.object.libvlc()
 pcall(vlc.var.set, libvlc, "key-pressed", 0)
-vlc.msg.info("[rotate_hotkey] active, rotate=" .. ROTATE_KEY .. " mirror=" .. MIRROR_KEY)
+vlc.msg.info("[rotate_hotkey] active, rotate=" .. ROTATE_KEY .. " mirror=" .. MIRROR_KEY
+  .. (CLIPTAG_ROOT and (" cliptag root=" .. CLIPTAG_ROOT) or " (cliptag off)"))
+
+if CLIPTAG_ROOT and os.getenv("CLIPTAG_SELFTEST") then
+  vlc.msg.info("[rotate_hotkey] selftest: opening tags dialog")
+  tag_dialog("Tags")
+  vlc.msg.info("[rotate_hotkey] selftest: tags dialog closed")
+end
 
 while true do
   local ok, key = pcall(vlc.var.get, libvlc, "key-pressed")
@@ -71,6 +102,9 @@ while true do
       osd("Mirror: " .. (mirrored and "on" or "off"))
     end
     apply_filters()
+  elseif ok and CLIPTAG_ROOT and (key == TAGS_KEY or key == ATTRS_KEY) then
+    pcall(vlc.var.set, libvlc, "key-pressed", 0)
+    tag_dialog(key == TAGS_KEY and "Tags" or "Attributes")
   end
   msleep(50)
 end
