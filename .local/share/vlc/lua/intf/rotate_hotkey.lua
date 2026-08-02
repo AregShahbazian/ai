@@ -17,36 +17,32 @@ Enable:    Tools > Preferences > (Show settings: All) > Interface > Main interfa
            ...or run:  vlc --extraintf luaintf --lua-intf rotate_hotkey
 Keys:      y  rotate +90° (cycles back to 0°)
            u  toggle horizontal mirror (flip left/right)
-           t  clip tagger: tags dialog       (only when CLIPTAG_ROOT env is set)
-           i  clip tagger: attributes dialog (only when CLIPTAG_ROOT env is set)
+           t  clip tagger: tags dialog
+           i  clip tagger: series dialog
            Change the *_KEY constants below to any plain character to rebind.
 
-The clip-tagger keys are inert in normal VLC sessions; they activate only when
-VLC is started via a launcher script that exports CLIPTAG_ROOT / CLIPTAG_DB
-(copy launch-tagger.template.sh, in this folder, into a clips root as
-launch-tagger.sh). Dialogs are external zenity
-windows, since VLC hotkeys can't reach lua extension dialogs.
+The clip-tagger keys work in any VLC session: the root is taken from the
+CLIPTAG_ROOT / CLIPTAG_DB env vars when set, otherwise discovered by walking
+up from the playing clip to the nearest cliptags.json. With no db found
+they just show an OSD notice.
+Dialogs are external GTK windows (cliptag-dialog.py), since VLC hotkeys
+can't reach lua extension dialogs.
 ]]
 
 local ROTATE_KEY = string.byte("y")  -- VLC keycode of a plain ASCII key == its codepoint
 local MIRROR_KEY = string.byte("u")
 local TAGS_KEY   = string.byte("t")
-local ATTRS_KEY  = string.byte("i")
+local SERIES_KEY = string.byte("i")
 local STEP = 90
 
 local CLIPTAG_ROOT = os.getenv("CLIPTAG_ROOT")
 local CLIPTAG_DB   = os.getenv("CLIPTAG_DB")
 
+local HELPER = os.getenv("HOME") .. "/.local/share/vlc/lua/intf/cliptag-dialog.py"
+
 local function sh_quote(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
 
--- Dummy dialogs for now: just prove the hotkey → dialog → env-var plumbing.
--- os.execute blocks only this lua thread; playback keeps running.
-local function tag_dialog(kind)
-  local text = "Root: " .. CLIPTAG_ROOT .. "\\nDB: " .. tostring(CLIPTAG_DB)
-  local rc = os.execute("zenity --info --title=" .. sh_quote("Clip " .. kind)
-    .. " --text=" .. sh_quote(text) .. " 2>>/tmp/cliptag-zenity.err")
-  vlc.msg.info("[rotate_hotkey] zenity rc=" .. tostring(rc))
-end
+
 
 local function msleep(ms) vlc.misc.mwait(vlc.misc.mdate() + ms * 1000) end
 
@@ -67,6 +63,52 @@ local function osd(text)
   end)
 end
 
+local function current_clip_path()
+  local ok, item = pcall(vlc.input.item)
+  if not ok or not item then return nil end
+  local uri = item:uri()
+  if not uri or not uri:find("^file://") then return nil end
+  return vlc.strings.decode_uri(uri:gsub("^file://", ""))
+end
+
+local function tags_dialog()
+  local clip = current_clip_path()
+  if not clip then osd("Tagger: no local clip playing") return end
+  -- /usr/bin/python3 explicitly: the GTK dialog needs PyGObject, which the
+  -- pyenv shim python3 doesn't have
+  local f = io.popen("/usr/bin/python3 " .. sh_quote(HELPER) .. " tags " .. sh_quote(clip)
+    .. " 2>>/tmp/cliptag-dialog.err")
+  local out = f:read("*a") or ""
+  f:close()
+  local saved = out:match("SAVED: (.-)%s*\n")
+  if saved then
+    osd("Tags: " .. saved)
+  elseif out:match("CANCELLED") then
+    osd("Tags: unchanged")
+  elseif out:match("NODB") then
+    osd("Tagger: no cliptags.json found above clip")
+  else
+    osd("Tagger error — see /tmp/cliptag-dialog.err")
+  end
+end
+
+-- os.execute / io.popen block only this lua thread; playback keeps running.
+local function series_dialog()
+  local clip = current_clip_path()  -- only needed to discover the root db
+  local f = io.popen("/usr/bin/python3 " .. sh_quote(HELPER) .. " series"
+    .. (clip and (" " .. sh_quote(clip)) or "")
+    .. " 2>>/tmp/cliptag-dialog.err")
+  local out = f:read("*a") or ""
+  f:close()
+  if out:match("DONE") then
+    osd("Series saved")
+  elseif out:match("NODB") then
+    osd("Tagger: no cliptags.json found above clip")
+  else
+    osd("Series dialog error — see /tmp/cliptag-dialog.err")
+  end
+end
+
 local function apply_filters()
   local vout = vlc.object.vout()
   if not vout then return end
@@ -84,9 +126,9 @@ vlc.msg.info("[rotate_hotkey] active, rotate=" .. ROTATE_KEY .. " mirror=" .. MI
   .. (CLIPTAG_ROOT and (" cliptag root=" .. CLIPTAG_ROOT) or " (cliptag off)"))
 
 if CLIPTAG_ROOT and os.getenv("CLIPTAG_SELFTEST") then
-  vlc.msg.info("[rotate_hotkey] selftest: opening tags dialog")
-  tag_dialog("Tags")
-  vlc.msg.info("[rotate_hotkey] selftest: tags dialog closed")
+  vlc.msg.info("[rotate_hotkey] selftest: opening series dialog")
+  series_dialog()
+  vlc.msg.info("[rotate_hotkey] selftest: series dialog closed")
 end
 
 while true do
@@ -102,9 +144,9 @@ while true do
       osd("Mirror: " .. (mirrored and "on" or "off"))
     end
     apply_filters()
-  elseif ok and CLIPTAG_ROOT and (key == TAGS_KEY or key == ATTRS_KEY) then
+  elseif ok and (key == TAGS_KEY or key == SERIES_KEY) then
     pcall(vlc.var.set, libvlc, "key-pressed", 0)
-    tag_dialog(key == TAGS_KEY and "Tags" or "Attributes")
+    if key == TAGS_KEY then tags_dialog() else series_dialog() end
   end
   msleep(50)
 end
