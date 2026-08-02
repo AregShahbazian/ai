@@ -15,8 +15,14 @@ keyboard-driven — typed characters accumulate in a background filter query,
 no focused input field. Run with /usr/bin/python3 (pyenv lacks PyGObject).
 
 tags mode:   check-list of <root>/tags.txt with the clip's current tags
-             pre-checked. Series show as pinned "⚡ title" rows — space on
-             one toggles-on all its tags (one-time template apply).
+             pre-checked. Tab-indented lines in tags.txt render as nested
+             child tags (stored flat, indent is presentation + filtering:
+             a query match keeps its subtree and ancestors visible).
+             Lines starting with "#" are section labels — shown dim and
+             unselectable; their group (deeper-indented rows, plus
+             same-depth rows down to the next label) filters with them.
+             Series show as pinned "⚡ title" rows — space on one
+             toggles-on all its tags (one-time template apply).
 series mode: CRUD editor for root-wide series (named tag templates):
              selector + new/rename/delete, and the same tag picker editing
              the selected series' tags.
@@ -64,9 +70,12 @@ def save_db(db_path, db):
 
 
 def load_options(root):
+    """Return [(tag, depth), ...] from <root>/tags.txt; leading tabs nest a
+    tag under the previous less-indented one."""
     try:
         with open(os.path.join(root, "tags.txt")) as f:
-            return [ln.strip() for ln in f if ln.strip()]
+            return [(ln.strip(), len(ln) - len(ln.lstrip("\t")))
+                    for ln in f if ln.strip()]
     except FileNotFoundError:
         return []
 
@@ -143,8 +152,31 @@ class TagPicker:
             row.destroy()
         for title in sorted(series or {}):
             self._add_series_row(title, series[title].get("tags", []))
-        for tag in tags:
-            self._add_tag_row(tag, tag in checked)
+        stack = []  # ancestor chain while walking the indented list
+        for item in tags:
+            tag, depth = item if isinstance(item, tuple) else (item, 0)
+            depth = min(depth, len(stack))  # tolerate indent jumps
+            stack = stack[:depth]
+            if tag.startswith("#"):
+                tag = tag.lstrip("#").strip()
+                self._add_label_row(tag, depth, list(stack))
+            else:
+                self._add_tag_row(tag, tag in checked, depth, list(stack))
+            stack.append(tag)
+        # each row's descendant names, so filtering can keep subtrees together.
+        # A label's group also spans following SAME-depth rows (a section
+        # header), until the next label there or a shallower line.
+        rows = [r for r in self.listbox.get_children() if r.kind != "series"]
+        for i, row in enumerate(rows):
+            for below in rows[i + 1:]:
+                if row.kind == "label":
+                    if below.depth < row.depth or (
+                            below.kind == "label" and below.depth <= row.depth):
+                        break
+                    below.ancestors.append(row.tag.lower())
+                elif below.depth <= row.depth:
+                    break
+                row.descendants.append(below.tag.lower())
         self.set_query("")
 
     def _add_row(self, child, kind, tag):
@@ -152,6 +184,7 @@ class TagPicker:
         row.add(child)
         row.set_can_focus(False)
         row.kind, row.tag = kind, tag
+        row.depth, row.ancestors, row.descendants = 0, [], []
         self.listbox.add(row)
         row.show_all()
         return row
@@ -167,17 +200,37 @@ class TagPicker:
         row.series_tags = list(tags)
         row.lbl = lbl
 
-    def _add_tag_row(self, tag, active):
+    def _add_label_row(self, name, depth, ancestors):
+        lbl = Gtk.Label(label=name, xalign=0)
+        lbl.get_style_context().add_class("dim-label")
+        lbl.set_margin_start(24 * depth)
+        row = self._add_row(lbl, "label", name)
+        row.set_selectable(False)  # a section header, not a tag
+        row.depth = depth
+        row.ancestors = [a.lower() for a in ancestors]
+
+    def _add_tag_row(self, tag, active, depth=0, ancestors=None):
         check = Gtk.CheckButton(label=tag)
         check.set_active(active)
         check.set_can_focus(False)  # all keys are handled at the window level
-        self._add_row(check, "tag", tag).check = check
+        check.set_margin_start(24 * depth)
+        row = self._add_row(check, "tag", tag)
+        row.check = check
+        row.depth = depth
+        row.ancestors = [a.lower() for a in (ancestors or [])]
 
     def _matches(self, row):
-        return self.query in row.tag.lower() if self.query else True
+        if not self.query:
+            return True
+        # a match pulls in its whole subtree and its ancestors for context
+        return any(self.query in name for name in
+                   [row.tag.lower()] + row.ancestors + row.descendants)
 
     def _visible_rows(self):
         return [r for r in self.listbox.get_children() if self._matches(r)]
+
+    def _selectable_rows(self):
+        return [r for r in self._visible_rows() if r.kind != "label"]
 
     def _select(self, row):
         self.listbox.select_row(row)
@@ -196,11 +249,11 @@ class TagPicker:
         self.query_lbl.set_text(("filter: " + text) if text else "")
         self.clear_btn.set_visible(bool(text))
         self.listbox.invalidate_filter()
-        rows = self._visible_rows()
+        rows = self._selectable_rows()
         self._select(rows[0] if rows else None)
 
     def move(self, delta):
-        rows = self._visible_rows()
+        rows = self._selectable_rows()
         if not rows:
             return
         sel = self.listbox.get_selected_row()
@@ -273,7 +326,9 @@ class TagPicker:
 
 def make_window(title, hint_text):
     win = Gtk.Window(title=title)
-    win.set_default_size(420, 520)
+    display = Gdk.Display.get_default()
+    monitor = display.get_primary_monitor() or display.get_monitor(0)
+    win.set_default_size(420, int(monitor.get_geometry().height * 0.95))
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
     box.set_border_width(10)
     win.add(box)
@@ -299,7 +354,8 @@ def tags_dialog(root, db_path, clip):
     current = set(entry.get("tags", []))
     options = load_options(root)
     # keep db-only tags visible so a save can't silently drop them
-    options += sorted(current.difference(options))
+    known = {tag for tag, depth in options}
+    options += [(tag, 0) for tag in sorted(current.difference(known))]
 
     win, box, hint = make_window("Clip Tags", HINT_PICKER + "\n⚡ rows are series: space applies their tags + links the clip (✓)")
     name_lbl = Gtk.Label(label=os.path.basename(clip))
@@ -395,7 +451,8 @@ def series_dialog(root, db_path):
             placeholder.show()
             return
         stags = series[title].get("tags", [])
-        options = base_options + sorted(set(stags).difference(base_options))
+        known = {tag for tag, depth in base_options}
+        options = base_options + [(t, 0) for t in sorted(set(stags).difference(known))]
         if state["picker"] is None:
             state["picker"] = TagPicker(options, set(stags))
             picker_slot.pack_start(state["picker"].widget, True, True, 0)
