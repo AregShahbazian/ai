@@ -504,15 +504,27 @@ class TagPicker:
         lbl.get_style_context().add_class("dim-label")
         lbl.set_margin_start(24 * depth)
         child = lbl
+        sync_btn = None
+        if self.on_add_tag or self.on_apply:
+            child = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+            child.pack_start(lbl, True, True, 0)
+        if self.on_apply:
+            sync_btn = Gtk.Button(label="→⚡")
+            self._compact(sync_btn)
+            sync_btn.set_no_show_all(True)  # shown only while a series is linked
+            sync_btn.set_tooltip_text(
+                "sync all of this group's tag states to the clip's series")
+            child.pack_end(sync_btn, False, False, 0)
         if self.on_add_tag:
             add_btn = Gtk.Button(label="+")
             self._compact(add_btn)
             add_btn.set_tooltip_text("add a tag under this label (rewrites tags.txt)")
             add_btn.connect("clicked", lambda *a: self.on_add_tag(name, depth))
-            child = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-            child.pack_start(lbl, True, True, 0)
             child.pack_end(add_btn, False, False, 0)
         row = self._add_row(child, "label", name, group)
+        if sync_btn is not None:
+            sync_btn.connect("clicked", lambda *a: self._sync_group_to_series(row))
+            row.apply_btn = sync_btn  # follows tag-row →⚡ visibility
         row.set_selectable(False)  # a section header, not a tag
         row.depth = depth
         row.ancestors = [a.lower() for a in ancestors]
@@ -560,6 +572,13 @@ class TagPicker:
         row.ancestors = [a.lower() for a in (ancestors or [])]
         return row
 
+    def _sync_group_to_series(self, label_row):
+        """Push the on/off state of every tag in this label's group into
+        the linked series (the group ListBox holds exactly its members)."""
+        for r in label_row.get_parent().get_children():
+            if r.kind == "tag":
+                self.on_apply(r.tag, r.check.get_active())
+
     def _matches(self, row):
         if not self.query:
             return True
@@ -571,6 +590,12 @@ class TagPicker:
 
     def rows(self):
         return list(self._rows)
+
+    def select_tag(self, tag):
+        row = next((r for r in self._rows
+                    if r.kind == "tag" and r.tag == tag), None)
+        if row is not None:
+            self._select(row)
 
     def _visible_rows(self):
         return [r for r in self._rows if self._matches(r)]
@@ -798,6 +823,7 @@ def tags_dialog(root, db_path, clip):
         name = prompt_text(win, 'Add tag under "%s"' % label)
         if name and add_tag_to_label(root, label, depth, name):
             reload_picker(set(picker.checked_tags()))
+            picker.select_tag(name)  # ready to toggle with space right away
 
     def rename_tag(tag):
         new = prompt_text(win, 'Rename tag "%s"' % tag, tag)
@@ -988,6 +1014,7 @@ def series_dialog(root, db_path):
         name = prompt('Add tag under "%s"' % label)
         if name and add_tag_to_label(root, label, depth, name):
             reload_picker(set(state["picker"].checked_tags()))
+            state["picker"].select_tag(name)  # ready to toggle with space
 
     def rename_tag(tag):
         new = prompt('Rename tag "%s"' % tag, tag)
