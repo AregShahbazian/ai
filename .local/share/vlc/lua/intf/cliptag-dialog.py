@@ -24,8 +24,13 @@ tags mode:   check-list of <root>/tags.txt with the clip's current tags
              Label rows carry a "+" button: prompts for a tag name and
              inserts it at the end of that label's group, rewriting
              tags.txt in place (works in both dialogs).
-             Series show as pinned "⚡ title" rows — space on one
-             toggles-on all its tags (one-time template apply).
+             Every tag row carries "✏" (rename) and "🗑" (delete, with
+             confirm) buttons — both rewrite tags.txt AND refactor all
+             references in the db (clip tags, series tags); rename merges
+             if the target name already exists (works in both dialogs).
+             Series show as pinned "⚡ title" rows — space or double-click
+             toggles the series on the clip: link it and check its tags,
+             or, if it is the linked one, delink and uncheck its tags.
              While a series is linked, each tag row shows a "→⚡" button
              (ctrl+a = selected row) that pushes that tag's on/off state
              into the linked series without opening the series dialog.
@@ -223,6 +228,62 @@ def prompt_text(parent, title_text, default=""):
     return text if resp == Gtk.ResponseType.OK and text else None
 
 
+def confirm_text(parent, text):
+    dlg = Gtk.MessageDialog(transient_for=parent, modal=True,
+                            message_type=Gtk.MessageType.QUESTION,
+                            buttons=Gtk.ButtonsType.YES_NO, text=text)
+    resp = dlg.run()
+    dlg.destroy()
+    return resp == Gtk.ResponseType.YES
+
+
+def _rename_in_list(lst, old, new):
+    if old in lst:
+        seen = set()
+        lst[:] = [t for t in (new if t == old else t for t in lst)
+                  if not (t in seen or seen.add(t))]
+
+
+def rename_tag_everywhere(root, db, old, new):
+    """Rename a tag in tags.txt (indent preserved) and every clip/series
+    reference in the db. Merges (dedupes) if new already exists."""
+    path = os.path.join(root, "tags.txt")
+    try:
+        with open(path) as f:
+            lines = f.read().splitlines()
+        for i, ln in enumerate(lines):
+            if ln.strip() == old and not ln.strip().startswith("#"):
+                lines[i] = ln[:len(ln) - len(ln.lstrip())] + new
+        with open(path, "w") as f:
+            f.write("\n".join(lines) + "\n")
+    except FileNotFoundError:
+        pass
+    for c in db.get("clips", {}).values():
+        _rename_in_list(c.get("tags", []), old, new)
+    for s in db.get("series", {}).values():
+        _rename_in_list(s.get("tags", []), old, new)
+
+
+def delete_tag_everywhere(root, db, tag):
+    """Drop a tag's line(s) from tags.txt and every clip/series reference."""
+    path = os.path.join(root, "tags.txt")
+    try:
+        with open(path) as f:
+            lines = f.read().splitlines()
+        lines = [ln for ln in lines
+                 if ln.strip() != tag or ln.strip().startswith("#")]
+        with open(path, "w") as f:
+            f.write("\n".join(lines) + "\n")
+    except FileNotFoundError:
+        pass
+    for c in db.get("clips", {}).values():
+        if tag in c.get("tags", []):
+            c["tags"].remove(tag)
+    for s in db.get("series", {}).values():
+        if tag in s.get("tags", []):
+            s["tags"].remove(tag)
+
+
 def relink_series(db, old, new):
     """Follow a series rename (new=title) or delete (new=None) on clip links."""
     for clip in db.get("clips", {}).values():
@@ -239,10 +300,13 @@ class TagPicker:
     _compact_css = None  # shared provider for padding-free row buttons
 
     def __init__(self, tags, checked, series=None, linked_series=None, on_apply=None,
-                 on_add_tag=None):
+                 on_add_tag=None, on_rename_tag=None, on_delete_tag=None):
         self.query = ""
         self.on_apply = on_apply  # callback(tag, active): per-row "apply to series"
         self.on_add_tag = on_add_tag  # callback(label, depth): "+" on label rows
+        self.on_rename_tag = on_rename_tag  # callback(tag): "✏" on tag rows
+        self.on_delete_tag = on_delete_tag  # callback(tag): "🗑" on tag rows
+        self.on_link_changed = None  # notified when the series link toggles
         self.applied_series = None  # series applied this session (max 1, last wins)
         self.linked_series = linked_series  # series already stored on the clip
         self._bs_start = self._bs_last = None  # backspace press/hold tracking
@@ -260,21 +324,19 @@ class TagPicker:
         bar.pack_start(self.clear_btn, False, False, 0)
         bar.pack_start(clear_all_btn, False, False, 0)
 
-        # vertical FlowBox of GROUP boxes: each flow child is a ListBox
-        # holding rows that must stay together (a label + its tags, a
-        # label-less run, or all series). Content flows downward and wraps
-        # whole groups into a new column on the right instead of scrolling.
-        self.flow = Gtk.FlowBox()
-        self.flow.set_orientation(Gtk.Orientation.VERTICAL)
-        self.flow.set_selection_mode(Gtk.SelectionMode.NONE)  # rows select, not groups
-        self.flow.set_homogeneous(False)
-        self.flow.set_halign(Gtk.Align.START)
-        self.flow.set_valign(Gtk.Align.START)
-        self.flow.set_column_spacing(18)
-        self.flow.set_row_spacing(10)
+        # column-fill layout (flex-col + wrap): GROUP boxes — each a ListBox
+        # of rows that must stay together (a label + its tags, a label-less
+        # run, or all series) — stack downward at natural height and wrap
+        # into a new column when the next group wouldn't fit the viewport
+        # height. GTK3's vertical FlowBox can't do this (it gives every
+        # child its own column), so _relayout() packs an HBox of VBoxes.
+        self.columns_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18)
+        self._columns = []
+        self._last_h = 0
         self.scroller = Gtk.ScrolledWindow()
         self.scroller.set_vexpand(True)
-        self.scroller.add(self.flow)
+        self.scroller.add(self.columns_box)
+        self.scroller.connect("size-allocate", self._on_scroller_alloc)
 
         self.widget = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.widget.pack_start(bar, False, False, 0)
@@ -282,8 +344,11 @@ class TagPicker:
         self.reload(tags, checked, series)
 
     def reload(self, tags, checked, series=None):
-        for wrapper in self.flow.get_children():
-            wrapper.destroy()
+        for group in getattr(self, "_groups", []):
+            group.destroy()
+        for col in self._columns:
+            col.destroy()
+        self._columns = []
         self._rows = []
         self._groups = []
         self._selected = None
@@ -325,14 +390,46 @@ class TagPicker:
         group.set_selection_mode(Gtk.SelectionMode.SINGLE)
         group.set_filter_func(lambda row, *a: self._matches(row))
         group.connect("row-selected", self._on_row_selected)
-        wrapper = Gtk.FlowBoxChild()
-        wrapper.set_can_focus(False)
-        wrapper.add(group)
-        self.flow.add(wrapper)
-        wrapper.show_all()
-        group.wrapper = wrapper
+        group.set_activate_on_single_click(False)  # single click only selects
+        group.connect("row-activated", self._on_row_activated)  # double-click
+        group.set_halign(Gtk.Align.CENTER)  # centered in its column slot
+        group.set_valign(Gtk.Align.START)   # never taller than it needs
         self._groups.append(group)
         return group
+
+    def _on_scroller_alloc(self, widget, alloc):
+        if alloc.height != self._last_h:
+            self._last_h = alloc.height
+            GLib.idle_add(self._relayout)  # never repack inside an allocation
+
+    def _relayout(self):
+        """Greedy column fill: stack visible groups top-down at natural
+        height, wrapping to a fresh column when the viewport height is
+        exceeded. Re-run on resize, filtering, and content changes."""
+        h_avail = self.scroller.get_allocated_height()
+        if h_avail <= 1:
+            return False  # not allocated yet; size-allocate will call again
+        spacing = 10
+        for col in self._columns:
+            for child in col.get_children():
+                col.remove(child)  # keep the groups alive for repacking
+            self.columns_box.remove(col)
+        self._columns = []
+        col, used = None, 0
+        for group in self._groups:
+            if not group.get_visible():
+                continue
+            h = group.get_preferred_height().natural_height
+            if col is None or (used > 0 and used + h > h_avail):
+                col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=spacing)
+                col.set_valign(Gtk.Align.START)
+                self.columns_box.pack_start(col, False, False, 0)
+                col.show()
+                self._columns.append(col)
+                used = 0
+            col.pack_start(group, False, False, 0)
+            used += h + spacing
+        return False  # one-shot when used via idle_add
 
     def _add_row(self, child, kind, tag, group, rows_index=None):
         row = Gtk.ListBoxRow()
@@ -347,6 +444,13 @@ class TagPicker:
         else:
             self._rows.insert(rows_index, row)
         return row
+
+    def _on_row_activated(self, group, row):
+        # row-activated fires on double-click (single click just selects)
+        if row.kind == "series":
+            self._toggle_series(row)
+            self.set_query("")
+            self._select(row)
 
     def _on_row_selected(self, group, row):
         # mouse clicks land here; keep at most one selected row across groups
@@ -425,6 +529,9 @@ class TagPicker:
         check.set_margin_start(24 * depth)
         child = check
         apply_btn = None
+        if self.on_apply or self.on_rename_tag or self.on_delete_tag:
+            child = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+            child.pack_start(check, True, True, 0)
         if self.on_apply:
             apply_btn = Gtk.Button(label="→⚡")
             self._compact(apply_btn)
@@ -433,9 +540,19 @@ class TagPicker:
                 "apply this tag's on/off state to the clip's series (ctrl+a = selected row)")
             apply_btn.connect("clicked",
                               lambda *a: self.on_apply(tag, check.get_active()))
-            child = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-            child.pack_start(check, True, True, 0)
             child.pack_end(apply_btn, False, False, 0)
+        if self.on_delete_tag:
+            del_btn = Gtk.Button(label="🗑")
+            self._compact(del_btn)
+            del_btn.set_tooltip_text("delete this tag everywhere (tags.txt, clips, series)")
+            del_btn.connect("clicked", lambda *a: self.on_delete_tag(tag))
+            child.pack_end(del_btn, False, False, 0)
+        if self.on_rename_tag:
+            edit_btn = Gtk.Button(label="✏")
+            self._compact(edit_btn)
+            edit_btn.set_tooltip_text("rename this tag everywhere (tags.txt, clips, series)")
+            edit_btn.connect("clicked", lambda *a: self.on_rename_tag(tag))
+            child.pack_end(edit_btn, False, False, 0)
         row = self._add_row(child, "tag", tag, group)
         row.check = check
         row.apply_btn = apply_btn
@@ -446,6 +563,8 @@ class TagPicker:
     def _matches(self, row):
         if not self.query:
             return True
+        if row.kind == "series":
+            return False  # queries filter tags; the series section hides
         # a match pulls in its whole subtree and its ancestors for context
         return any(self.query in name for name in
                    [row.tag.lower()] + row.ancestors + row.descendants)
@@ -464,7 +583,7 @@ class TagPicker:
         if row is None:
             return
         # keep the selected row scrolled into view (columns scroll sideways)
-        coords = row.translate_coordinates(self.flow, 0, 0)
+        coords = row.translate_coordinates(self.columns_box, 0, 0)
         if not coords:
             return
         alloc = row.get_allocation()
@@ -482,9 +601,10 @@ class TagPicker:
         self.clear_btn.set_visible(bool(text))
         for group in self._groups:
             group.invalidate_filter()
-            # hide groups with nothing visible so they free their flow slot
-            group.wrapper.set_visible(
+            # hide groups with nothing visible so they free their column slot
+            group.set_visible(
                 any(self._matches(r) for r in group.get_children()))
+        self._relayout()
         rows = self._selectable_rows()
         self._select(rows[0] if rows else None)
 
@@ -502,13 +622,26 @@ class TagPicker:
         if not row or row.kind == "label" or not self._matches(row):
             return
         if row.kind == "series":
-            self.check_tags(row.series_tags)
-            self.applied_series = row.tag
-            self._refresh_series_labels()
+            self._toggle_series(row)
         else:
             row.check.set_active(not row.check.get_active())
         self.set_query("")  # reset filter for the next tag
         self._select(row)  # ...but stay on the toggled row
+
+    def _toggle_series(self, row):
+        """Toggle the series on the clip: link + apply its tags, or — when
+        it is the currently linked series — delink + untoggle its tags."""
+        if row.tag == (self.applied_series or self.linked_series):
+            for r in self._rows:
+                if r.kind == "tag" and r.tag in row.series_tags:
+                    r.check.set_active(False)
+            self.applied_series = self.linked_series = None
+        else:
+            self.check_tags(row.series_tags)
+            self.applied_series = row.tag
+        self._refresh_series_labels()
+        if self.on_link_changed:
+            self.on_link_changed()
 
     def _refresh_series_labels(self):
         for r in self._rows:
@@ -520,12 +653,13 @@ class TagPicker:
         if not any(r.kind == "series" and r.tag == title for r in self._rows):
             if self._series_group is None:
                 self._series_group = self._new_group()
-                # keep the series group pinned at the top of the flow
-                wrapper = self._series_group.wrapper
-                self.flow.remove(wrapper)
-                self.flow.insert(wrapper, 0)
+                # keep the series group pinned first (top of the first column)
+                self._groups.remove(self._series_group)
+                self._groups.insert(0, self._series_group)
+                self._series_group.set_visible(True)
             n_series = sum(1 for r in self._rows if r.kind == "series")
             self._add_series_row(title, tags, rows_index=n_series)
+            self._relayout()
         self.applied_series = title
         self._refresh_series_labels()
 
@@ -541,17 +675,28 @@ class TagPicker:
 
     def check_tags(self, tags):
         have = {r.tag: r for r in self._rows if r.kind == "tag"}
+        added = False
         for tag in tags:
             if tag in have:
                 have[tag].check.set_active(True)
             else:
                 self._add_tag_row(tag, True)
+                added = True
+        if added:
+            self._extra_group.set_visible(True)
+            self._relayout()
 
     def clear_visible(self):
-        """Untoggle all visible tags — with a filter active, only the matches."""
+        """Untoggle all visible tags — with a filter active, only the matches.
+        Also de-couples the clip's series link (dropped on save)."""
         for row in self._visible_rows():
             if row.kind == "tag":
                 row.check.set_active(False)
+        if self.applied_series or self.linked_series:
+            self.applied_series = self.linked_series = None
+            self._refresh_series_labels()
+            if self.on_link_changed:
+                self.on_link_changed()
 
     def checked_tags(self):
         return [r.tag for r in self._rows
@@ -628,7 +773,7 @@ def tags_dialog(root, db_path, clip):
     name_lbl = Gtk.Label(label=os.path.basename(clip))
     name_lbl.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
     def apply_tag_to_series(tag, active):
-        title = picker.applied_series or entry.get("series")
+        title = picker.applied_series or picker.linked_series
         if not title or title not in db.get("series", {}):
             return
         stags = db["series"][title].setdefault("tags", [])
@@ -639,23 +784,42 @@ def tags_dialog(root, db_path, clip):
         save_db(db_path, db)
         picker.update_series_tags(title, stags)  # keep the ⚡ row's apply fresh
 
-    def add_tag_under_label(label, depth):
-        name = prompt_text(win, 'Add tag under "%s"' % label)
-        if not name or not add_tag_to_label(root, label, depth, name):
-            return
-        checked = set(picker.checked_tags())
+    def reload_picker(checked):
         opts = load_options(root)
         known = {t for t, d in opts}
         opts += [(t, 0) for t in sorted(checked.difference(known))]
         picker.reload(opts, checked, db.get("series", {}))
         sync_apply_buttons()
 
+    def add_tag_under_label(label, depth):
+        name = prompt_text(win, 'Add tag under "%s"' % label)
+        if name and add_tag_to_label(root, label, depth, name):
+            reload_picker(set(picker.checked_tags()))
+
+    def rename_tag(tag):
+        new = prompt_text(win, 'Rename tag "%s"' % tag, tag)
+        if not new or new == tag:
+            return
+        rename_tag_everywhere(root, db, tag, new)
+        save_db(db_path, db)
+        reload_picker({new if t == tag else t for t in picker.checked_tags()})
+
+    def delete_tag(tag):
+        if not confirm_text(win, 'Delete tag "%s" everywhere?' % tag):
+            return
+        delete_tag_everywhere(root, db, tag)
+        save_db(db_path, db)
+        reload_picker(set(picker.checked_tags()) - {tag})
+
     picker = TagPicker(options, current, db.get("series", {}), entry.get("series"),
-                       on_apply=apply_tag_to_series, on_add_tag=add_tag_under_label)
+                       on_apply=apply_tag_to_series, on_add_tag=add_tag_under_label,
+                       on_rename_tag=rename_tag, on_delete_tag=delete_tag)
 
     def sync_apply_buttons():
         picker.set_apply_buttons_visible(
-            bool(picker.applied_series or entry.get("series")))
+            bool(picker.applied_series or picker.linked_series))
+
+    picker.on_link_changed = sync_apply_buttons  # covers mouse double-clicks too
 
     create_btn = Gtk.Button(label="Create series")
     create_btn.set_can_focus(False)
@@ -738,8 +902,11 @@ def tags_dialog(root, db_path, clip):
         entry["notes"] = notes
     else:
         entry.pop("notes", None)
-    if picker.applied_series:
-        entry["series"] = picker.applied_series
+    link = picker.applied_series or picker.linked_series
+    if link:
+        entry["series"] = link
+    else:
+        entry.pop("series", None)  # cleared-all dialogs de-couple the series
     save_db(db_path, db)
     print("SAVED: " + (", ".join(result["tags"]) if result["tags"] else "(none)"))
 
@@ -797,24 +964,43 @@ def series_dialog(root, db_path):
         options = base_options + [(t, 0) for t in sorted(set(stags).difference(known))]
         if state["picker"] is None:
             state["picker"] = TagPicker(options, set(stags),
-                                        on_add_tag=add_tag_under_label)
+                                        on_add_tag=add_tag_under_label,
+                                        on_rename_tag=rename_tag,
+                                        on_delete_tag=delete_tag)
             picker_slot.pack_start(state["picker"].widget, True, True, 0)
         else:
             state["picker"].reload(options, set(stags))
         placeholder.hide()
         state["picker"].widget.show_all()
 
-    def add_tag_under_label(label, depth):
-        name = prompt('Add tag under "%s"' % label)
-        if not name or not add_tag_to_label(root, label, depth, name):
-            return
+    def reload_picker(checked):
         base_options[:] = load_options(root)
         picker = state["picker"]
         if picker is not None and state["title"] is not None:
-            checked = set(picker.checked_tags())
             known = {t for t, d in base_options}
             opts = base_options + [(t, 0) for t in sorted(checked.difference(known))]
             picker.reload(opts, checked)
+
+    def add_tag_under_label(label, depth):
+        name = prompt('Add tag under "%s"' % label)
+        if name and add_tag_to_label(root, label, depth, name):
+            reload_picker(set(state["picker"].checked_tags()))
+
+    def rename_tag(tag):
+        new = prompt('Rename tag "%s"' % tag, tag)
+        if not new or new == tag:
+            return
+        rename_tag_everywhere(root, db, tag, new)
+        save_db(db_path, db)
+        reload_picker({new if t == tag else t
+                       for t in state["picker"].checked_tags()})
+
+    def delete_tag(tag):
+        if not confirm('Delete tag "%s" everywhere?' % tag):
+            return
+        delete_tag_everywhere(root, db, tag)
+        save_db(db_path, db)
+        reload_picker(set(state["picker"].checked_tags()) - {tag})
 
     def refresh_combo(select_title):
         state["suppress"] = True
