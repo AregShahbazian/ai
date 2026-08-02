@@ -21,6 +21,9 @@ tags mode:   check-list of <root>/tags.txt with the clip's current tags
              Lines starting with "#" are section labels — shown dim and
              unselectable; their group (deeper-indented rows, plus
              same-depth rows down to the next label) filters with them.
+             Label rows carry a "+" button: prompts for a tag name and
+             inserts it at the end of that label's group, rewriting
+             tags.txt in place (works in both dialogs).
              Series show as pinned "⚡ title" rows — space on one
              toggles-on all its tags (one-time template apply).
              While a series is linked, each tag row shows a "→⚡" button
@@ -80,15 +83,52 @@ def load_options(root):
     4-space runs) nest a tag under the previous less-indented one."""
     try:
         with open(os.path.join(root, "tags.txt")) as f:
-            out = []
-            for ln in f:
-                if not ln.strip():
-                    continue
-                ws = ln[:len(ln) - len(ln.lstrip())]
-                out.append((ln.strip(), ws.count("\t") + len(ws.replace("\t", "")) // 4))
-            return out
+            return [(ln.strip(), _line_depth(ln)) for ln in f if ln.strip()]
     except FileNotFoundError:
         return []
+
+
+def _line_depth(ln):
+    ws = ln[:len(ln) - len(ln.lstrip())]
+    return ws.count("\t") + len(ws.replace("\t", "")) // 4
+
+
+def add_tag_to_label(root, label, depth, new_tag):
+    """Insert new_tag at the end of the given label's group in tags.txt,
+    matching the group's member indent style. Rewrites the file, keeping
+    every other line (including blanks) verbatim. Returns True on success."""
+    path = os.path.join(root, "tags.txt")
+    try:
+        with open(path) as f:
+            lines = f.read().splitlines()
+    except FileNotFoundError:
+        return False
+    li = next((i for i, ln in enumerate(lines)
+               if ln.strip().startswith("#") and _line_depth(ln) == depth
+               and ln.strip().lstrip("#").strip() == label), None)
+    if li is None:
+        return False
+    nxt_depth = next((_line_depth(ln) for ln in lines[li + 1:] if ln.strip()), None)
+    deep = nxt_depth is None or nxt_depth > depth
+    member_depth = depth + 1 if deep else depth
+    end = li  # insert right after the label when the group is empty
+    for k in range(li + 1, len(lines)):
+        ln = lines[k]
+        if not ln.strip():
+            continue  # blank lines don't end a group
+        d = _line_depth(ln)
+        if deep:
+            if d <= depth:
+                break
+        elif d < depth or (ln.strip().startswith("#") and d <= depth):
+            break
+        if ln.strip() == new_tag:
+            return True  # already in this group — nothing to do
+        end = k
+    lines.insert(end + 1, "\t" * member_depth + new_tag)
+    with open(path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    return True
 
 
 def parse_options(items):
@@ -198,9 +238,11 @@ class TagPicker:
 
     _compact_css = None  # shared provider for padding-free row buttons
 
-    def __init__(self, tags, checked, series=None, linked_series=None, on_apply=None):
+    def __init__(self, tags, checked, series=None, linked_series=None, on_apply=None,
+                 on_add_tag=None):
         self.query = ""
         self.on_apply = on_apply  # callback(tag, active): per-row "apply to series"
+        self.on_add_tag = on_add_tag  # callback(label, depth): "+" on label rows
         self.applied_series = None  # series applied this session (max 1, last wins)
         self.linked_series = linked_series  # series already stored on the clip
         self._bs_start = self._bs_last = None  # backspace press/hold tracking
@@ -341,11 +383,32 @@ class TagPicker:
         row.lbl = lbl
         return row
 
+    def _compact(self, btn):
+        # strip the theme's button padding so the row keeps its height
+        if TagPicker._compact_css is None:
+            TagPicker._compact_css = Gtk.CssProvider()
+            TagPicker._compact_css.load_from_data(
+                b"button { padding: 0px 6px; min-height: 0px; }")
+        btn.get_style_context().add_provider(
+            TagPicker._compact_css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        btn.set_can_focus(False)
+        btn.set_relief(Gtk.ReliefStyle.NONE)
+        btn.set_valign(Gtk.Align.CENTER)
+
     def _add_label_row(self, group, name, depth, ancestors):
         lbl = Gtk.Label(label=name, xalign=0)
         lbl.get_style_context().add_class("dim-label")
         lbl.set_margin_start(24 * depth)
-        row = self._add_row(lbl, "label", name, group)
+        child = lbl
+        if self.on_add_tag:
+            add_btn = Gtk.Button(label="+")
+            self._compact(add_btn)
+            add_btn.set_tooltip_text("add a tag under this label (rewrites tags.txt)")
+            add_btn.connect("clicked", lambda *a: self.on_add_tag(name, depth))
+            child = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+            child.pack_start(lbl, True, True, 0)
+            child.pack_end(add_btn, False, False, 0)
+        row = self._add_row(child, "label", name, group)
         row.set_selectable(False)  # a section header, not a tag
         row.depth = depth
         row.ancestors = [a.lower() for a in ancestors]
@@ -364,16 +427,7 @@ class TagPicker:
         apply_btn = None
         if self.on_apply:
             apply_btn = Gtk.Button(label="→⚡")
-            apply_btn.set_can_focus(False)
-            apply_btn.set_relief(Gtk.ReliefStyle.NONE)
-            apply_btn.set_valign(Gtk.Align.CENTER)
-            # strip the theme's button padding so the row keeps its height
-            if TagPicker._compact_css is None:
-                TagPicker._compact_css = Gtk.CssProvider()
-                TagPicker._compact_css.load_from_data(
-                    b"button { padding: 0px 6px; min-height: 0px; }")
-            apply_btn.get_style_context().add_provider(
-                TagPicker._compact_css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            self._compact(apply_btn)
             apply_btn.set_no_show_all(True)  # shown only while a series is linked
             apply_btn.set_tooltip_text(
                 "apply this tag's on/off state to the clip's series (ctrl+a = selected row)")
@@ -585,8 +639,19 @@ def tags_dialog(root, db_path, clip):
         save_db(db_path, db)
         picker.update_series_tags(title, stags)  # keep the ⚡ row's apply fresh
 
+    def add_tag_under_label(label, depth):
+        name = prompt_text(win, 'Add tag under "%s"' % label)
+        if not name or not add_tag_to_label(root, label, depth, name):
+            return
+        checked = set(picker.checked_tags())
+        opts = load_options(root)
+        known = {t for t, d in opts}
+        opts += [(t, 0) for t in sorted(checked.difference(known))]
+        picker.reload(opts, checked, db.get("series", {}))
+        sync_apply_buttons()
+
     picker = TagPicker(options, current, db.get("series", {}), entry.get("series"),
-                       on_apply=apply_tag_to_series)
+                       on_apply=apply_tag_to_series, on_add_tag=add_tag_under_label)
 
     def sync_apply_buttons():
         picker.set_apply_buttons_visible(
@@ -731,12 +796,25 @@ def series_dialog(root, db_path):
         known = {tag for tag, depth in base_options}
         options = base_options + [(t, 0) for t in sorted(set(stags).difference(known))]
         if state["picker"] is None:
-            state["picker"] = TagPicker(options, set(stags))
+            state["picker"] = TagPicker(options, set(stags),
+                                        on_add_tag=add_tag_under_label)
             picker_slot.pack_start(state["picker"].widget, True, True, 0)
         else:
             state["picker"].reload(options, set(stags))
         placeholder.hide()
         state["picker"].widget.show_all()
+
+    def add_tag_under_label(label, depth):
+        name = prompt('Add tag under "%s"' % label)
+        if not name or not add_tag_to_label(root, label, depth, name):
+            return
+        base_options[:] = load_options(root)
+        picker = state["picker"]
+        if picker is not None and state["title"] is not None:
+            checked = set(picker.checked_tags())
+            known = {t for t, d in base_options}
+            opts = base_options + [(t, 0) for t in sorted(checked.difference(known))]
+            picker.reload(opts, checked)
 
     def refresh_combo(select_title):
         state["suppress"] = True
