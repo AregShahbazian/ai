@@ -76,14 +76,72 @@ def save_db(db_path, db):
 
 
 def load_options(root):
-    """Return [(tag, depth), ...] from <root>/tags.txt; leading tabs nest a
-    tag under the previous less-indented one."""
+    """Return [(tag, depth), ...] from <root>/tags.txt; leading tabs (or
+    4-space runs) nest a tag under the previous less-indented one."""
     try:
         with open(os.path.join(root, "tags.txt")) as f:
-            return [(ln.strip(), len(ln) - len(ln.lstrip("\t")))
-                    for ln in f if ln.strip()]
+            out = []
+            for ln in f:
+                if not ln.strip():
+                    continue
+                ws = ln[:len(ln) - len(ln.lstrip())]
+                out.append((ln.strip(), ws.count("\t") + len(ws.replace("\t", "")) // 4))
+            return out
     except FileNotFoundError:
         return []
+
+
+def parse_options(items):
+    """Normalize [(name, depth)|name, ...] into entry dicts with kind
+    ("label" for lines starting with #, else "tag") and indent ancestors."""
+    entries = []
+    stack = []
+    for item in items:
+        name, depth = item if isinstance(item, tuple) else (item, 0)
+        depth = min(depth, len(stack))  # tolerate indent jumps
+        stack = stack[:depth]
+        kind = "label" if name.startswith("#") else "tag"
+        if kind == "label":
+            name = name.lstrip("#").strip()
+        entries.append({"kind": kind, "name": name, "depth": depth,
+                        "ancestors": list(stack)})
+        stack.append(name)
+    return entries
+
+
+def segment_groups(entries):
+    """Split entries into display groups that must never wrap apart:
+    each label + its group (deeper-indented rows, or same-depth rows down
+    to the next label), and each uninterrupted label-less run of tags."""
+    groups = []
+    run = None
+    i = 0
+    while i < len(entries):
+        e = entries[i]
+        if e["kind"] == "label":
+            run = None
+            grp = [e]
+            d = e["depth"]
+            nxt = entries[i + 1] if i + 1 < len(entries) else None
+            deep = nxt is not None and nxt["depth"] > d
+            i += 1
+            while i < len(entries):
+                x = entries[i]
+                if deep:
+                    if x["depth"] <= d:
+                        break
+                elif x["depth"] < d or (x["kind"] == "label" and x["depth"] <= d):
+                    break
+                grp.append(x)
+                i += 1
+            groups.append(grp)
+        else:
+            if run is None:
+                run = []
+                groups.append(run)
+            run.append(e)
+            i += 1
+    return groups
 
 
 def resolve_root(clip):
@@ -160,12 +218,21 @@ class TagPicker:
         bar.pack_start(self.clear_btn, False, False, 0)
         bar.pack_start(clear_all_btn, False, False, 0)
 
-        self.listbox = Gtk.ListBox()
-        self.listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
-        self.listbox.set_filter_func(lambda row, *a: self._matches(row))
+        # vertical FlowBox of GROUP boxes: each flow child is a ListBox
+        # holding rows that must stay together (a label + its tags, a
+        # label-less run, or all series). Content flows downward and wraps
+        # whole groups into a new column on the right instead of scrolling.
+        self.flow = Gtk.FlowBox()
+        self.flow.set_orientation(Gtk.Orientation.VERTICAL)
+        self.flow.set_selection_mode(Gtk.SelectionMode.NONE)  # rows select, not groups
+        self.flow.set_homogeneous(False)
+        self.flow.set_halign(Gtk.Align.START)
+        self.flow.set_valign(Gtk.Align.START)
+        self.flow.set_column_spacing(18)
+        self.flow.set_row_spacing(10)
         self.scroller = Gtk.ScrolledWindow()
         self.scroller.set_vexpand(True)
-        self.scroller.add(self.listbox)
+        self.scroller.add(self.flow)
 
         self.widget = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.widget.pack_start(bar, False, False, 0)
@@ -173,69 +240,122 @@ class TagPicker:
         self.reload(tags, checked, series)
 
     def reload(self, tags, checked, series=None):
-        for row in self.listbox.get_children():
-            row.destroy()
-        for title in sorted(series or {}):
-            self._add_series_row(title, series[title].get("tags", []))
-        stack = []  # ancestor chain while walking the indented list
-        for item in tags:
-            tag, depth = item if isinstance(item, tuple) else (item, 0)
-            depth = min(depth, len(stack))  # tolerate indent jumps
-            stack = stack[:depth]
-            if tag.startswith("#"):
-                tag = tag.lstrip("#").strip()
-                self._add_label_row(tag, depth, list(stack))
-            else:
-                self._add_tag_row(tag, tag in checked, depth, list(stack))
-            stack.append(tag)
-        # each row's descendant names, so filtering can keep subtrees together.
-        # A label's group also spans following SAME-depth rows (a section
-        # header), until the next label there or a shallower line.
-        rows = [r for r in self.listbox.get_children() if r.kind != "series"]
+        for wrapper in self.flow.get_children():
+            wrapper.destroy()
+        self._rows = []
+        self._groups = []
+        self._selected = None
+        self._series_group = None
+        self._extra_group = None  # lazily holds tags added at runtime
+        if series:
+            self._series_group = self._new_group()
+            for title in sorted(series):
+                self._add_series_row(title, series[title].get("tags", []))
+        for grp in segment_groups(parse_options(tags)):
+            group = self._new_group()
+            label_row = None
+            for e in grp:
+                if e["kind"] == "label":
+                    label_row = self._add_label_row(group, e["name"], e["depth"],
+                                                    e["ancestors"])
+                else:
+                    row = self._add_tag_row(e["name"], e["name"] in checked,
+                                            e["depth"], e["ancestors"], group)
+                    if label_row is not None:
+                        # group members filter together with their label
+                        label_row.descendants.append(e["name"].lower())
+                        if label_row.tag.lower() not in row.ancestors:
+                            row.ancestors.append(label_row.tag.lower())
+        # indent-based descendants (labels included, so a deeper label ends
+        # the shallower tag's subtree), keeping subtrees filtering together
+        rows = [r for r in self._rows if r.kind != "series"]
         for i, row in enumerate(rows):
+            if row.kind == "label":
+                continue  # label groups were linked above; labels only bound subtrees
             for below in rows[i + 1:]:
-                if row.kind == "label":
-                    if below.depth < row.depth or (
-                            below.kind == "label" and below.depth <= row.depth):
-                        break
-                    below.ancestors.append(row.tag.lower())
-                elif below.depth <= row.depth:
+                if below.depth <= row.depth:
                     break
                 row.descendants.append(below.tag.lower())
         self.set_query("")
 
-    def _add_row(self, child, kind, tag):
+    def _new_group(self):
+        group = Gtk.ListBox()
+        group.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        group.set_filter_func(lambda row, *a: self._matches(row))
+        group.connect("row-selected", self._on_row_selected)
+        wrapper = Gtk.FlowBoxChild()
+        wrapper.set_can_focus(False)
+        wrapper.add(group)
+        self.flow.add(wrapper)
+        wrapper.show_all()
+        group.wrapper = wrapper
+        self._groups.append(group)
+        return group
+
+    def _add_row(self, child, kind, tag, group, rows_index=None):
         row = Gtk.ListBoxRow()
         row.add(child)
         row.set_can_focus(False)
         row.kind, row.tag = kind, tag
         row.depth, row.ancestors, row.descendants = 0, [], []
-        self.listbox.add(row)
+        group.add(row)
         row.show_all()
+        if rows_index is None:
+            self._rows.append(row)
+        else:
+            self._rows.insert(rows_index, row)
         return row
+
+    def _on_row_selected(self, group, row):
+        # mouse clicks land here; keep at most one selected row across groups
+        if row is None or getattr(self, "_sel_guard", False):
+            return
+        self._selected = row
+        self._sel_guard = True
+        for g in self._groups:
+            if g is not group:
+                g.unselect_all()
+        self._sel_guard = False
+
+    def _do_select(self, row):
+        self._sel_guard = True
+        for g in self._groups:
+            g.unselect_all()
+        if row is not None:
+            row.get_parent().select_row(row)
+        self._selected = row
+        self._sel_guard = False
+
+    def selected_row(self):
+        return self._selected
 
     def _series_label(self, title):
         linked = self.applied_series or self.linked_series
         return "⚡ " + title + (" ✓" if title == linked else "")
 
-    def _add_series_row(self, title, tags):
+    def _add_series_row(self, title, tags, rows_index=None):
         lbl = Gtk.Label(label=self._series_label(title), xalign=0)
         lbl.get_style_context().add_class("dim-label")
-        row = self._add_row(lbl, "series", title)
+        row = self._add_row(lbl, "series", title, self._series_group, rows_index)
         row.series_tags = list(tags)
         row.lbl = lbl
         return row
 
-    def _add_label_row(self, name, depth, ancestors):
+    def _add_label_row(self, group, name, depth, ancestors):
         lbl = Gtk.Label(label=name, xalign=0)
         lbl.get_style_context().add_class("dim-label")
         lbl.set_margin_start(24 * depth)
-        row = self._add_row(lbl, "label", name)
+        row = self._add_row(lbl, "label", name, group)
         row.set_selectable(False)  # a section header, not a tag
         row.depth = depth
         row.ancestors = [a.lower() for a in ancestors]
+        return row
 
-    def _add_tag_row(self, tag, active, depth=0, ancestors=None):
+    def _add_tag_row(self, tag, active, depth=0, ancestors=None, group=None):
+        if group is None:  # runtime additions (e.g. series apply) get their own group
+            if self._extra_group is None:
+                self._extra_group = self._new_group()
+            group = self._extra_group
         check = Gtk.CheckButton(label=tag)
         check.set_active(active)
         check.set_can_focus(False)  # all keys are handled at the window level
@@ -262,11 +382,12 @@ class TagPicker:
             child = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
             child.pack_start(check, True, True, 0)
             child.pack_end(apply_btn, False, False, 0)
-        row = self._add_row(child, "tag", tag)
+        row = self._add_row(child, "tag", tag, group)
         row.check = check
         row.apply_btn = apply_btn
         row.depth = depth
         row.ancestors = [a.lower() for a in (ancestors or [])]
+        return row
 
     def _matches(self, row):
         if not self.query:
@@ -275,29 +396,41 @@ class TagPicker:
         return any(self.query in name for name in
                    [row.tag.lower()] + row.ancestors + row.descendants)
 
+    def rows(self):
+        return list(self._rows)
+
     def _visible_rows(self):
-        return [r for r in self.listbox.get_children() if self._matches(r)]
+        return [r for r in self._rows if self._matches(r)]
 
     def _selectable_rows(self):
         return [r for r in self._visible_rows() if r.kind != "label"]
 
     def _select(self, row):
-        self.listbox.select_row(row)
+        self._do_select(row)
         if row is None:
             return
-        # keep the selected row scrolled into view
+        # keep the selected row scrolled into view (columns scroll sideways)
+        coords = row.translate_coordinates(self.flow, 0, 0)
+        if not coords:
+            return
         alloc = row.get_allocation()
-        adj = self.scroller.get_vadjustment()
-        if alloc.y < adj.get_value():
-            adj.set_value(alloc.y)
-        elif alloc.y + alloc.height > adj.get_value() + adj.get_page_size():
-            adj.set_value(alloc.y + alloc.height - adj.get_page_size())
+        for adj, pos, size in (
+                (self.scroller.get_vadjustment(), coords[1], alloc.height),
+                (self.scroller.get_hadjustment(), coords[0], alloc.width)):
+            if pos < adj.get_value():
+                adj.set_value(pos)
+            elif pos + size > adj.get_value() + adj.get_page_size():
+                adj.set_value(pos + size - adj.get_page_size())
 
     def set_query(self, text):
         self.query = text
         self.query_lbl.set_text(("filter: " + text) if text else "")
         self.clear_btn.set_visible(bool(text))
-        self.listbox.invalidate_filter()
+        for group in self._groups:
+            group.invalidate_filter()
+            # hide groups with nothing visible so they free their flow slot
+            group.wrapper.set_visible(
+                any(self._matches(r) for r in group.get_children()))
         rows = self._selectable_rows()
         self._select(rows[0] if rows else None)
 
@@ -305,13 +438,14 @@ class TagPicker:
         rows = self._selectable_rows()
         if not rows:
             return
-        sel = self.listbox.get_selected_row()
+        sel = self.selected_row()
         i = rows.index(sel) if sel in rows else 0
         self._select(rows[max(0, min(len(rows) - 1, i + delta))])
 
     def toggle(self):
-        row = self.listbox.get_selected_row()
-        if not row or not self._matches(row):
+        row = self.selected_row()
+        # labels can still be mouse-selected (FlowBoxChild can't opt out)
+        if not row or row.kind == "label" or not self._matches(row):
             return
         if row.kind == "series":
             self.check_tags(row.series_tags)
@@ -323,34 +457,36 @@ class TagPicker:
         self._select(row)  # ...but stay on the toggled row
 
     def _refresh_series_labels(self):
-        for r in self.listbox.get_children():
+        for r in self._rows:
             if r.kind == "series":
                 r.lbl.set_text(self._series_label(r.tag))
 
     def apply_new_series(self, title, tags):
         """Add (or find) a ⚡ row for a just-created series and mark it applied."""
-        rows = self.listbox.get_children()
-        if not any(r.kind == "series" and r.tag == title for r in rows):
-            row = self._add_series_row(title, tags)
-            # keep series rows pinned at the top, above the tag rows
-            n_series = sum(1 for r in rows if r.kind == "series")
-            self.listbox.remove(row)
-            self.listbox.insert(row, n_series)
+        if not any(r.kind == "series" and r.tag == title for r in self._rows):
+            if self._series_group is None:
+                self._series_group = self._new_group()
+                # keep the series group pinned at the top of the flow
+                wrapper = self._series_group.wrapper
+                self.flow.remove(wrapper)
+                self.flow.insert(wrapper, 0)
+            n_series = sum(1 for r in self._rows if r.kind == "series")
+            self._add_series_row(title, tags, rows_index=n_series)
         self.applied_series = title
         self._refresh_series_labels()
 
     def set_apply_buttons_visible(self, visible):
-        for r in self.listbox.get_children():
+        for r in self._rows:
             if getattr(r, "apply_btn", None):
                 r.apply_btn.set_visible(visible)
 
     def update_series_tags(self, title, tags):
-        for r in self.listbox.get_children():
+        for r in self._rows:
             if r.kind == "series" and r.tag == title:
                 r.series_tags = list(tags)
 
     def check_tags(self, tags):
-        have = {r.tag: r for r in self.listbox.get_children() if r.kind == "tag"}
+        have = {r.tag: r for r in self._rows if r.kind == "tag"}
         for tag in tags:
             if tag in have:
                 have[tag].check.set_active(True)
@@ -364,7 +500,7 @@ class TagPicker:
                 row.check.set_active(False)
 
     def checked_tags(self):
-        return [r.tag for r in self.listbox.get_children()
+        return [r.tag for r in self._rows
                 if r.kind == "tag" and r.check.get_active()]
 
     def handle_key(self, event):
@@ -402,7 +538,9 @@ def make_window(title, hint_text):
     win = Gtk.Window(title=title)
     display = Gdk.Display.get_default()
     monitor = display.get_primary_monitor() or display.get_monitor(0)
-    win.set_default_size(420, int(monitor.get_geometry().height * 0.95))
+    geo = monitor.get_geometry()
+    # wide enough for the flow columns, tall enough to avoid wrapping early
+    win.set_default_size(int(geo.width * 0.5), int(geo.height * 0.95))
     Gtk.Widget.set_opacity(win, 0.8)  # keep the video visible behind the dialog
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
     box.set_border_width(10)
@@ -513,7 +651,7 @@ def tags_dialog(root, db_path, clip):
         elif ctrl and event.keyval in (Gdk.KEY_s, Gdk.KEY_S):
             create_series()
         elif ctrl and event.keyval in (Gdk.KEY_a, Gdk.KEY_A):
-            row = picker.listbox.get_selected_row()
+            row = picker.selected_row()
             if row and row.kind == "tag":
                 apply_tag_to_series(row.tag, row.check.get_active())
         else:
