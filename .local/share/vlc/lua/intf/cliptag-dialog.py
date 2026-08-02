@@ -103,6 +103,22 @@ def resolve_root(clip):
         d = parent
 
 
+def prompt_text(parent, title_text, default=""):
+    dlg = Gtk.Dialog(title=title_text, transient_for=parent, modal=True)
+    dlg.add_buttons("Cancel", Gtk.ResponseType.CANCEL, "OK", Gtk.ResponseType.OK)
+    dlg.set_default_response(Gtk.ResponseType.OK)
+    entry = Gtk.Entry(text=default)
+    entry.set_activates_default(True)
+    area = dlg.get_content_area()
+    area.set_border_width(10)
+    area.add(entry)
+    dlg.show_all()
+    resp = dlg.run()
+    text = entry.get_text().strip()
+    dlg.destroy()
+    return text if resp == Gtk.ResponseType.OK and text else None
+
+
 def relink_series(db, old, new):
     """Follow a series rename (new=title) or delete (new=None) on clip links."""
     for clip in db.get("clips", {}).values():
@@ -199,6 +215,7 @@ class TagPicker:
         row = self._add_row(lbl, "series", title)
         row.series_tags = list(tags)
         row.lbl = lbl
+        return row
 
     def _add_label_row(self, name, depth, ancestors):
         lbl = Gtk.Label(label=name, xalign=0)
@@ -267,13 +284,28 @@ class TagPicker:
         if row.kind == "series":
             self.check_tags(row.series_tags)
             self.applied_series = row.tag
-            for r in self.listbox.get_children():
-                if r.kind == "series":
-                    r.lbl.set_text(self._series_label(r.tag))
+            self._refresh_series_labels()
         else:
             row.check.set_active(not row.check.get_active())
         self.set_query("")  # reset filter for the next tag
         self._select(row)  # ...but stay on the toggled row
+
+    def _refresh_series_labels(self):
+        for r in self.listbox.get_children():
+            if r.kind == "series":
+                r.lbl.set_text(self._series_label(r.tag))
+
+    def apply_new_series(self, title, tags):
+        """Add (or find) a ⚡ row for a just-created series and mark it applied."""
+        rows = self.listbox.get_children()
+        if not any(r.kind == "series" and r.tag == title for r in rows):
+            row = self._add_series_row(title, tags)
+            # keep series rows pinned at the top, above the tag rows
+            n_series = sum(1 for r in rows if r.kind == "series")
+            self.listbox.remove(row)
+            self.listbox.insert(row, n_series)
+        self.applied_series = title
+        self._refresh_series_labels()
 
     def check_tags(self, tags):
         have = {r.tag: r for r in self.listbox.get_children() if r.kind == "tag"}
@@ -361,18 +393,41 @@ def tags_dialog(root, db_path, clip):
     name_lbl = Gtk.Label(label=os.path.basename(clip))
     name_lbl.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
     picker = TagPicker(options, current, db.get("series", {}), entry.get("series"))
+    create_btn = Gtk.Button(label="Create series")
+    create_btn.set_can_focus(False)
+    create_btn.set_tooltip_text("new series from this clip's checked tags, and link the clip to it (ctrl+s)")
+    actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+    actions.pack_end(create_btn, False, False, 0)
     box.pack_start(name_lbl, False, False, 0)
     box.pack_start(picker.widget, True, True, 0)
+    box.pack_start(actions, False, False, 0)
     box.pack_start(hint, False, False, 0)
 
     result = {"tags": None}
 
+    def create_series(*a):
+        title = prompt_text(win, "Create series",
+                            os.path.splitext(os.path.basename(clip))[0])
+        if not title:
+            return
+        # existing title: just link the clip to it, don't clobber its tags
+        if title not in db.setdefault("series", {}):
+            db["series"][title] = {"tags": picker.checked_tags()}
+        entry["series"] = title  # overwrites a previously assigned series
+        save_db(db_path, db)
+        picker.apply_new_series(title, db["series"][title]["tags"])
+
+    create_btn.connect("clicked", create_series)
+
     def on_key(widget, event):
+        ctrl = event.state & Gdk.ModifierType.CONTROL_MASK
         if event.keyval == Gdk.KEY_Escape:
             Gtk.main_quit()
         elif event.keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
             result["tags"] = picker.checked_tags()
             Gtk.main_quit()
+        elif ctrl and event.keyval in (Gdk.KEY_s, Gdk.KEY_S):
+            create_series()
         else:
             return picker.handle_key(event)
         return True
@@ -415,19 +470,7 @@ def series_dialog(root, db_path):
     box.pack_start(hint, False, False, 0)
 
     def prompt(title_text, default=""):
-        dlg = Gtk.Dialog(title=title_text, transient_for=win, modal=True)
-        dlg.add_buttons("Cancel", Gtk.ResponseType.CANCEL, "OK", Gtk.ResponseType.OK)
-        dlg.set_default_response(Gtk.ResponseType.OK)
-        entry = Gtk.Entry(text=default)
-        entry.set_activates_default(True)
-        area = dlg.get_content_area()
-        area.set_border_width(10)
-        area.add(entry)
-        dlg.show_all()
-        resp = dlg.run()
-        text = entry.get_text().strip()
-        dlg.destroy()
-        return text if resp == Gtk.ResponseType.OK and text else None
+        return prompt_text(win, title_text, default)
 
     def confirm(text):
         dlg = Gtk.MessageDialog(transient_for=win, modal=True,
