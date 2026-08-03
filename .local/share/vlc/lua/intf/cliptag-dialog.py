@@ -24,6 +24,10 @@ tags mode:   check-list of <root>/tags.txt with the clip's current tags
              Label rows carry a "+" button: prompts for a tag name and
              inserts it at the end of that label's group, rewriting
              tags.txt in place (works in both dialogs).
+             Label-group members carry a "⠿" drag handle on the left:
+             drag onto another row of the same group to reorder; the
+             group's block order in tags.txt (sublines included) follows.
+             Ungrouped tags are not reorderable.
              Every tag row carries "✏" (rename) and "🗑" (delete, with
              confirm) buttons — both rewrite tags.txt AND refactor all
              references in the db (clip tags, series tags); rename merges
@@ -132,6 +136,52 @@ def add_tag_to_label(root, label, depth, new_tag):
             return True  # already in this group — nothing to do
         end = k
     lines.insert(end + 1, "\t" * member_depth + new_tag)
+    with open(path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    return True
+
+
+def reorder_label_group(root, label, depth, ordered):
+    """Rewrite the given label's group in tags.txt so its member blocks (a
+    member line plus its deeper-indented sublines) follow `ordered`. Inner
+    blank lines are dropped; everything outside the group is untouched."""
+    path = os.path.join(root, "tags.txt")
+    try:
+        with open(path) as f:
+            lines = f.read().splitlines()
+    except FileNotFoundError:
+        return False
+    li = next((i for i, ln in enumerate(lines)
+               if ln.strip().startswith("#") and _line_depth(ln) == depth
+               and ln.strip().lstrip("#").strip() == label), None)
+    if li is None:
+        return False
+    nxt_depth = next((_line_depth(ln) for ln in lines[li + 1:] if ln.strip()), None)
+    deep = nxt_depth is None or nxt_depth > depth
+    member_depth = depth + 1 if deep else depth
+    blocks = {}
+    current = None
+    end = li
+    for k in range(li + 1, len(lines)):
+        ln = lines[k]
+        if not ln.strip():
+            continue  # blanks don't end a group (trailing ones stay outside)
+        d = _line_depth(ln)
+        if deep:
+            if d <= depth:
+                break
+        elif d < depth or (ln.strip().startswith("#") and d <= depth):
+            break
+        if d == member_depth:
+            current = ln.strip()
+            blocks[current] = [ln]
+        elif current is not None:
+            blocks[current].append(ln)  # deeper subline moves with its member
+        end = k
+    if set(ordered) != set(blocks):
+        return False  # stale view of the file — refuse to rewrite
+    reordered = [ln for name in ordered for ln in blocks[name]]
+    lines[li + 1:end + 1] = reordered
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")
     return True
@@ -308,6 +358,8 @@ class TagPicker:
         self.on_rename_tag = on_rename_tag  # callback(tag): "✏" on tag rows
         self.on_delete_tag = on_delete_tag  # callback(tag): "🗑" on tag rows
         self.on_link_changed = None  # notified when the series link toggles
+        self.on_reorder = None  # callback(label, depth, ordered): drag-reorder
+        self._drag_row = None
         self.applied_series = None  # series applied this session (max 1, last wins)
         self.linked_series = linked_series  # series already stored on the clip
         self._bs_start = self._bs_last = None  # backspace press/hold tracking
@@ -346,7 +398,7 @@ class TagPicker:
 
     def reload(self, tags, checked, series=None):
         for group in getattr(self, "_groups", []):
-            group.destroy()
+            group.container.destroy()
         for col in self._columns:
             col.destroy()
         self._columns = []
@@ -356,7 +408,7 @@ class TagPicker:
         self._series_group = None
         self._extra_group = None  # lazily holds tags added at runtime
         if series:
-            self._series_group = self._new_group()
+            self._series_group = self._new_group(scroll_max=self.SERIES_MAX_HEIGHT)
             for title in sorted(series):
                 self._add_series_row(title, series[title].get("tags", []))
         for grp in segment_groups(parse_options(tags)):
@@ -368,7 +420,9 @@ class TagPicker:
                                                     e["ancestors"])
                 else:
                     row = self._add_tag_row(e["name"], e["name"] in checked,
-                                            e["depth"], e["ancestors"], group)
+                                            e["depth"], e["ancestors"], group,
+                                            group_label=(label_row.tag, label_row.depth)
+                                            if label_row is not None else None)
                     if label_row is not None:
                         # group members filter together with their label
                         label_row.descendants.append(e["name"].lower())
@@ -386,7 +440,9 @@ class TagPicker:
                 row.descendants.append(below.tag.lower())
         self.set_query("")
 
-    def _new_group(self):
+    SERIES_MAX_HEIGHT = 200  # ≈7 rows; the series group scrolls beyond this
+
+    def _new_group(self, scroll_max=None):
         group = Gtk.ListBox()
         group.set_selection_mode(Gtk.SelectionMode.SINGLE)
         group.set_filter_func(lambda row, *a: self._matches(row))
@@ -394,6 +450,15 @@ class TagPicker:
         group.set_activate_on_single_click(False)  # single click only selects
         group.set_halign(Gtk.Align.CENTER)  # centered in its column slot
         group.set_valign(Gtk.Align.START)   # never taller than it needs
+        group.container = group
+        if scroll_max:
+            sw = Gtk.ScrolledWindow()
+            sw.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+            sw.set_propagate_natural_height(True)  # natural height up to the cap
+            sw.set_max_content_height(scroll_max)
+            sw.add(group)
+            group.show()
+            group.container = sw
         self._groups.append(group)
         return group
 
@@ -417,9 +482,9 @@ class TagPicker:
         self._columns = []
         col, used = None, 0
         for group in self._groups:
-            if not group.get_visible():
+            if not group.container.get_visible():
                 continue
-            h = group.get_preferred_height().natural_height
+            h = group.container.get_preferred_height().natural_height
             if col is None or (used > 0 and used + h > h_avail):
                 col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=spacing)
                 col.set_valign(Gtk.Align.START)
@@ -427,7 +492,7 @@ class TagPicker:
                 col.show()
                 self._columns.append(col)
                 used = 0
-            col.pack_start(group, False, False, 0)
+            col.pack_start(group.container, False, False, 0)
             used += h + spacing
         return False  # one-shot when used via idle_add
 
@@ -537,7 +602,8 @@ class TagPicker:
         row.ancestors = [a.lower() for a in ancestors]
         return row
 
-    def _add_tag_row(self, tag, active, depth=0, ancestors=None, group=None):
+    def _add_tag_row(self, tag, active, depth=0, ancestors=None, group=None,
+                     group_label=None):
         if group is None:  # runtime additions (e.g. series apply) get their own group
             if self._extra_group is None:
                 self._extra_group = self._new_group()
@@ -548,8 +614,15 @@ class TagPicker:
         check.set_margin_start(24 * depth)
         child = check
         apply_btn = None
-        if self.on_apply or self.on_rename_tag or self.on_delete_tag:
+        handle = None
+        if group_label or self.on_apply or self.on_rename_tag or self.on_delete_tag:
             child = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+            if group_label:  # only label-group members are drag-reorderable
+                handle = Gtk.EventBox()
+                handle_lbl = Gtk.Label(label="⠿")
+                handle_lbl.get_style_context().add_class("dim-label")
+                handle.add(handle_lbl)
+                child.pack_start(handle, False, False, 0)
             child.pack_start(check, True, True, 0)
         if self.on_apply:
             apply_btn = Gtk.Button(label="→⚡")
@@ -577,7 +650,39 @@ class TagPicker:
         row.apply_btn = apply_btn
         row.depth = depth
         row.ancestors = [a.lower() for a in (ancestors or [])]
+        row.group_label = group_label
+        if handle is not None:
+            targets = [Gtk.TargetEntry.new("CLIPTAG_ROW", Gtk.TargetFlags.SAME_APP, 0)]
+            handle.drag_source_set(Gdk.ModifierType.BUTTON1_MASK, targets,
+                                   Gdk.DragAction.MOVE)
+            handle.connect("drag-begin",
+                           lambda *a: setattr(self, "_drag_row", row))
+            # payload must match the requested custom target — set_text would
+            # answer with a TEXT type and the drop silently fails
+            handle.connect("drag-data-get",
+                           lambda w, ctx, sel, info, time:
+                           sel.set(sel.get_target(), 8, b"row"))
+            row.drag_dest_set(Gtk.DestDefaults.ALL, targets, Gdk.DragAction.MOVE)
+            row.connect("drag-data-received",
+                        lambda w, ctx, x, y, sel, info, time: self._on_row_drop(row))
         return row
+
+    def _on_row_drop(self, dest):
+        src, self._drag_row = self._drag_row, None
+        if (src is None or src is dest
+                or src.get_parent() is not dest.get_parent()):
+            return  # drops only reorder within the same label group
+        self._reorder_rows(src, dest)
+
+    def _reorder_rows(self, src, dest):
+        group = src.get_parent()
+        di = group.get_children().index(dest)
+        group.remove(src)
+        group.insert(src, di)  # lands after dest dragging down, before it up
+        self._rows = [r for g in self._groups for r in g.get_children()]
+        if self.on_reorder and src.group_label:
+            ordered = [r.tag for r in group.get_children() if r.kind == "tag"]
+            self.on_reorder(src.group_label[0], src.group_label[1], ordered)
 
     def _sync_group_to_series(self, label_row):
         """Push the on/off state of every tag in this label's group into
@@ -614,6 +719,15 @@ class TagPicker:
         self._do_select(row)
         if row is None:
             return
+        # a capped (scrollable) group scrolls internally first
+        container = row.get_parent().container
+        if isinstance(container, Gtk.ScrolledWindow):
+            alloc = row.get_allocation()
+            adj = container.get_vadjustment()
+            if alloc.y < adj.get_value():
+                adj.set_value(alloc.y)
+            elif alloc.y + alloc.height > adj.get_value() + adj.get_page_size():
+                adj.set_value(alloc.y + alloc.height - adj.get_page_size())
         # keep the selected row scrolled into view (columns scroll sideways)
         coords = row.translate_coordinates(self.columns_box, 0, 0)
         if not coords:
@@ -634,7 +748,7 @@ class TagPicker:
         for group in self._groups:
             group.invalidate_filter()
             # hide groups with nothing visible so they free their column slot
-            group.set_visible(
+            group.container.set_visible(
                 any(self._matches(r) for r in group.get_children()))
         self._relayout()
         # nothing selected by default — ↓ enters the list at the top
@@ -688,11 +802,11 @@ class TagPicker:
         """Add (or find) a ⚡ row for a just-created series and mark it applied."""
         if not any(r.kind == "series" and r.tag == title for r in self._rows):
             if self._series_group is None:
-                self._series_group = self._new_group()
+                self._series_group = self._new_group(scroll_max=self.SERIES_MAX_HEIGHT)
                 # keep the series group pinned first (top of the first column)
                 self._groups.remove(self._series_group)
                 self._groups.insert(0, self._series_group)
-                self._series_group.set_visible(True)
+                self._series_group.container.set_visible(True)
             n_series = sum(1 for r in self._rows if r.kind == "series")
             self._add_series_row(title, tags, rows_index=n_series)
             self._relayout()
@@ -719,7 +833,7 @@ class TagPicker:
                 self._add_tag_row(tag, True)
                 added = True
         if added:
-            self._extra_group.set_visible(True)
+            self._extra_group.container.set_visible(True)
             self._relayout()
 
     def clear_visible(self):
@@ -856,7 +970,9 @@ def tags_dialog(root, db_path, clip):
         picker.set_apply_buttons_visible(
             bool(picker.applied_series or picker.linked_series))
 
-    picker.on_link_changed = sync_apply_buttons  # covers mouse double-clicks too
+    picker.on_link_changed = sync_apply_buttons  # covers mouse button path too
+    picker.on_reorder = lambda label, depth, ordered: \
+        reorder_label_group(root, label, depth, ordered)
 
     create_btn = Gtk.Button(label="Create series")
     create_btn.set_can_focus(False)
@@ -1004,6 +1120,8 @@ def series_dialog(root, db_path):
                                         on_add_tag=add_tag_under_label,
                                         on_rename_tag=rename_tag,
                                         on_delete_tag=delete_tag)
+            state["picker"].on_reorder = lambda label, depth, ordered: \
+                reorder_label_group(root, label, depth, ordered)
             picker_slot.pack_start(state["picker"].widget, True, True, 0)
         else:
             state["picker"].reload(options, set(stags))
