@@ -2,6 +2,7 @@
 
 > Source: `$COINRAYJS_DIR` (branch: master)
 > Git hash: `776653b4267a002b623218151bc6cd2485d984a5`
+> Hashes verified current: 2026-08-18.
 > Do NOT explore source — use this doc instead.
 
 ## Singleton Access

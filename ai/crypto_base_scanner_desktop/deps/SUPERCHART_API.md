@@ -1,8 +1,9 @@
 # Superchart API Reference
 
 > Source: `$SUPERCHART_DIR` (branch: main)
-> Superchart git hash: `44be3f64d106dc7d83ec4b914392e3abfcb1b1f7`
-> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `174b32443ccb2543963d8b6ba9be80baefd857f6`
+> Superchart git hash: `4bd96aaf2c69b7badbca0e9f93bc4d571e1080c6`
+> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `52332cebd7f8e1f06983a00544258057020cce98`
+> Hashes verified current: 2026-08-18.
 > Do NOT explore source — use this doc instead.
 
 ## Package name & version
@@ -11,6 +12,19 @@
 - Current published version: `0.1.0` (was `0.0.1`).
 - Distribution: GitHub Packages (`https://npm.pkg.github.com/`), scoped + restricted.
   See `$SUPERCHART_DIR/docs/versioning-and-release.md` for the publish flow.
+- **Stylesheet subpaths (updated in the design-system range `4bd96aaf`).**
+  ```json
+  "exports": {
+    "./styles":  { "types": "./dist-enterprise/styles.d.ts", "default": "./dist-enterprise/superchart.css" },
+    "./ui.css":  "./dist-enterprise/superchart-ui.css"      // NEW — design-system component CSS, standalone
+  }
+  ```
+  `./styles` is unchanged as an import string but its *contents* changed: it is
+  now the DS token/utility layer concatenated with the legacy LESS output (DS
+  first — the order is load-bearing for `@layer` precedence). `./ui.css` is the
+  DS-only sheet; **do not load it alongside `./styles`**. See
+  `SUPERCHART_USAGE.md` → "Design-system migration" for the required
+  Font Awesome import.
 - **Two editions (new in `24e6fb8`).** SC now ships as two separate packages
   built from a single source tree:
   - `@coinrayio/superchart` (community) — built into `dist-community/`,
@@ -229,6 +243,14 @@ Also re-exports Superchart-specific types: `SuperchartOptions`, `SuperchartApi`,
 `BrandConfig`, `BrandOption`.
 `ExtractedDrawingTemplate`.
 
+Alerts/events exports (new in `de73a0a` / `a523ceb`):
+`Alert` (from `./store/chartStore`), `ChartEvent`, `ChartEventType` (from `./types/datafeed`).
+
+Resolution helpers are now exported **as values**, not just types (new in the
+`4bd96aaf` range): `resolutionToPeriod`, `periodToResolution`. The local
+reimplementation in `helpers.js` (see "Resolution ↔ Period Conversion") can be
+dropped once the app upgrades.
+
 Indicator type re-exports (new in `f51001b2` — types existed in `src/lib/types/indicator.ts`, now added to the package surface):
 `IndicatorCategory`, `IndicatorSubscribeParams`, `IndicatorSubscription`, `IndicatorDataHandler`,
 `IndicatorTickHandler`, `IndicatorDataPoint`, `IndicatorMetadata`, `IndicatorPlot`, `PlotLine`,
@@ -314,6 +336,11 @@ getBackendIndicators(): UseBackendIndicatorsReturn | null
 openScriptEditor(options?: { initialCode?: string; readOnly?: boolean }): void
 closeScriptEditor(): void
 setPeriodBarVisible(visible: boolean): void   // show/hide the entire period bar at runtime
+// Alerts & events — EPHEMERAL, not persisted in ChartState; re-push after reload (new in a523ceb / de73a0a)
+setAlerts(alerts: Alert[]): void
+getAlerts(): Alert[]
+setEvents(events: ChartEvent[]): void
+getEvents(): ChartEvent[]
 createButton(options?: ToolbarButtonOptions): HTMLElement
 createDropdown(options: ToolbarDropdownOptions): HTMLElement
 onSymbolChange(callback: (symbol: SymbolInfo) => void): () => void   // returns unsubscribe
@@ -387,6 +414,11 @@ interface Datafeed {
   // Optional — required for replay start-time validation
   getFirstCandleTime?(symbolName: string, resolution: string,
     callback: (timestamp: number | null) => void): void
+
+  // Optional (new in de73a0a) — economic/earnings event markers.
+  // Datafeeds without it still work; no markers render.
+  getEvents?(symbolInfo: LibrarySymbolInfo, from: number, to: number,
+    callback: (events: ChartEvent[]) => void): void
 }
 ```
 
@@ -467,8 +499,19 @@ Predefined PERIODS constant:
   market?: string
   priceCurrency?: string
   logo?: string
+  timezone?: string              // IANA tz of the symbol's exchange (new in d2f940c)
 }
 ```
+
+### Alert / ChartEvent (new in `a523ceb` / `de73a0a`)
+```typescript
+interface Alert { id: string; price: number; label?: string; color?: string }
+
+type ChartEventType = 'earnings' | 'dividends' | 'splits' | 'economic'
+interface ChartEvent { id: string; type: ChartEventType; timestamp: number; label?: string }
+```
+Pushed via `setAlerts()` / `setEvents()`. **Ephemeral** — never written to
+`ChartState`, so the host must re-push them after every reload.
 
 ### LibrarySymbolInfo
 ```typescript
@@ -688,21 +731,157 @@ interface ChartState {
   overlayDefaults?: Record<string, DeepPartial<OverlayProperties>>
   activeChartTemplate?: string            // name of last applied/saved chart template; shown in the period bar dropdown
   userFeatureOverrides?: Record<string, boolean>  // user toggle overrides (e.g. auto_save_state) persisted across reloads
+
+  // Favourites (new in the 4bd96aaf range — ALTD-1909/1910/1911)
+  favoriteTools?: FavoriteToolRef[]        // drawing-bar favourites, display order
+  favoritesBarPosition?: {x: number, y: number}  // floating favourites-bar drag position, container-relative px;
+                                                 // absent → bar centres horizontally on first paint
+  favoritePeriods?: FavoritePeriodRef[]    // pinned quick-switch timeframes, display order
+  favoriteLayouts?: string[]               // pinned chart-layout template names, display order
+}
+
+interface FavoriteToolRef { key: string; iconKey?: string; extendData?: unknown }
+interface FavoritePeriodRef { span: number; type: string }
+```
+
+A host storing `ChartState` opaquely (as Altrady does) needs no change — these are
+additive fields inside the same blob.
+
+### ChartPreferences
+
+Grew substantially in the `4bd96aaf` range (ALTD-1915.x — the Settings-modal
+rewrite). **All additions are optional**, and the whole object is persisted
+inside `ChartState`, so a host that stores chart state opaquely needs no change.
+
+```typescript
+interface ChartPreferences {
+  showVolume: boolean                       // default true
+  showCrosshair: boolean                    // default true
+  showGrid: boolean                         // default true
+  showLegend: boolean                       // default true
+  magnetMode: 'normal' | 'weak' | 'strong'  // default 'normal' — overlay DRAG magnet, not the crosshair one
+  timezone?: string                         // store signal defaults to 'Etc/UTC'
+  locale?: string                           // store signal defaults to 'en-US'
+
+  // ALTD-1913 — timezone follows the symbol's exchange; `timezone` then only caches
+  // the last applied value. An explicit user pick from the launcher resets this to false.
+  followExchangeTimezone?: boolean          // store signal defaults to false
+
+  // ── Symbol tab (1915.2) ──
+  symbolOverrides?: Record<string, {        // keyed by SymbolInfo.ticker; merged into the
+    pricePrecision?: number                 // effective SymbolInfo on every chart.setSymbol
+    priceSource?: 'close' | 'open' | 'high' | 'low' | 'hl2' | 'hlc3' | 'ohlc4'  // default 'close'
+  }>
+  adjustDividends?: boolean                 // datafeed HINT — SC does not apply these itself
+  adjustSplits?: boolean
+  wickSameAsBody?: boolean                  // TV's toggle; true → wick pickers grey out and mirror body
+
+  // ── Canvas tab (1915.3) ──
+  background?: {                            // absent → theme-driven default
+    mode: 'solid' | 'gradient' | 'image'
+    color?: string
+    gradientStart?: string
+    gradientEnd?: string
+    gradientAngle?: number                  // default 180 (0 = top→bottom)
+    imageSrc?: string                       // data-URI
+    imageOpacity?: number                   // 0–100
+    imageFit?: 'contain' | 'cover' | 'stretch' | 'tile'
+  }
+  watermark?: {                             // absent, or show:false → falls back to brand default
+    show: boolean
+    text: string
+    fontFamily?: string
+    fontSize?: number
+    color?: string
+    opacity?: number                        // 0–100
+    position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'centre'
+  }
+
+  // ── Status Line tab (1915.4) — replaces the deprecated `volume_in_legend` flag ──
+  // Every field defaults to TRUE when undefined; only an explicit false hides a piece.
+  statusLine?: {
+    symbolName?: boolean; description?: boolean; exchange?: boolean; interval?: boolean
+    barChanges?: boolean; ohlc?: boolean; volume?: boolean
+    indicatorTitle?: boolean; indicatorArguments?: boolean
+    indicatorValues?: boolean; indicatorLastValueBadge?: boolean
+    buySellButtons?: boolean                // tab renders disabled until 1915.7 wiring lands
+  }
+
+  // ── Scales tab (1915.5) ──
+  scales?: {
+    pricePlacement?: 'right' | 'left' | 'hidden'   // default 'right'
+    priceReverse?: boolean
+    priceLabelsInside?: boolean
+    priceType?: 'normal' | 'percentage' | 'log' | 'indexed100'  // only 'normal' reaches the engine
+    autoScale?: boolean                     // persisted only — engine wiring TBD
+    lockScale?: boolean                     // persisted only
+    noOverlap?: boolean                     // persisted only
+    topMargin?: number                      // px
+    bottomMargin?: number                   // px
+    priceLabels?: {
+      last?: boolean                        // engine-supported
+      high?: boolean                        // engine-supported
+      low?: boolean                         // engine-supported
+      previousClose?: boolean               // persisted only
+      averageClose?: boolean                // persisted only
+      bidAsk?: boolean                      // persisted only — datafeed-dependent
+    }
+    showTimeScale?: boolean
+    showSeconds?: boolean                   // applied via chart.setShowSeconds
+    showDayBreaks?: boolean                 // persisted only
+  }
+
+  // ── Localization tab (1915.6) — persisted only, engine wiring deferred ──
+  numberFormat?: { thousands?: ',' | '.' | ' ' | 'none'; decimal?: '.' | ',' }
+  symbolDisplay?: { exchangePrefix?: boolean; typePrefix?: boolean }
+
+  // ── Trading tab (1915.7) — visibility of HOST-provided trading overlays ──
+  trading?: {
+    showOrders?: boolean; showPositions?: boolean; showExecutions?: boolean
+    buySellButtons?: boolean                // same key as statusLine.buySellButtons
+    orderColor?: string                     // defaults for overlays created without an explicit
+    positionColor?: string                  // colour; does NOT clobber already-coloured lines
+    executionColor?: string
+  }
+
+  // ── Alerts tab (1915.8) — STYLE only; the Alert[] list is ephemeral/host-owned ──
+  alerts?: {
+    show?: boolean
+    lineStyle?: 'solid' | 'dashed'
+    lineColor?: string
+    labelPosition?: 'left' | 'right'
+    sound?: boolean
+  }
+
+  // ── Events tab (1915.9) — all default false, so a datafeed without getEvents is unaffected ──
+  events?: {
+    sessionBreaks?: boolean                 // persisted only — engine wiring pending
+    extendedHours?: boolean                 // persisted only
+    extendedHoursColor?: string
+    earnings?: boolean; dividends?: boolean; splits?: boolean; economic?: boolean
+  }
+
+  recentIndicatorTemplates?: string[]       // ring buffer, most-recent first, capped at 5 (1915.11)
+  autoSaveDelay?: number                    // ms; persists the Preferences-tab slider across reloads
 }
 ```
 
-### ChartPreferences
-```typescript
-interface ChartPreferences {
-  showVolume: boolean
-  showCrosshair: boolean
-  showGrid: boolean
-  showLegend: boolean
-  magnetMode: 'normal' | 'weak' | 'strong'
-  timezone?: string
-  locale?: string
-}
-```
+> **SC API gap — a host cannot read or write these.** `ChartPreferences` is
+> mutated only through `useChartState().setPreference(path, value)` /
+> `getPreferences()`, and `useChartState` is **not exported** from
+> `src/lib/index.ts` nor surfaced on `SuperchartApi`. SC's own Settings modal is
+> the only writer. The only host-facing slices are `setAlerts()`/`setEvents()`
+> (which cover the *data*, not these style prefs) and the pre-existing
+> `setStyles()` / `setPaneOptions()` / `setSymbol()`. If Altrady needs
+> programmatic control of any preference above, that is a feature request to the
+> SC author.
+>
+> For reference, `setPreference(path, value)`'s `path` is dot-separated and
+> **relative to `preferences`**, not to `ChartState` — e.g.
+> `"symbolOverrides.BTCUSDT.pricePrecision"`, `"alerts.lineColor"`. It writes
+> immutably and persists through the normal `enqueueMutation` →
+> `StorageAdapter` path (immediate when `autoSaveDelay <= 0`, debounced above
+> that, cache-only when `auto_save_state` is off).
 
 > **Magnet snap rewritten (coinray-chart `174b3244` — ALTD-1898).** No type or config-key change —
 > `magnetMode` values are the same. The snap *algorithm* changed: it now picks the nearest of
@@ -710,6 +889,18 @@ interface ChartPreferences {
 > `Overlay.modeSensitivity`, whose default went **8px → 60px** (a much wider, more forgiving halo).
 > The old asymmetric behaviour (hard-snap anywhere inside the candle body regardless of mode) is gone.
 > Feel-only change — no code action needed unless you read or hardcode `modeSensitivity`.
+
+> **Two unrelated things are called "magnet" — do not conflate them when wiring UI toggles.**
+> 1. **Overlay drag-magnet** (pre-existing): `OverlayImp.mode: 'normal' | 'weak_magnet' | 'strong_magnet'`
+>    with a `modeSensitivity` pixel radius. Governs how a *dragged overlay point* snaps to OHLC
+>    while drawing/editing. This is what `ChartPreferences.magnetMode` above feeds.
+> 2. **Global crosshair magnet** (NEW, coinray-chart `bd92b49e`): `chart.setMagnetMode(mode)` /
+>    `getMagnetMode()`. Snaps the *crosshair itself*. `weak` snaps X to the nearest bar centre;
+>    `strong` additionally snaps Y to the nearest OHLC pixel, and only on the candle pane
+>    (`crosshair.paneId === CANDLE`); `normal` disables. Applied inside `Store.setCrosshair`
+>    before the crosshair snapshot, so tooltip and crosshair-line views see the snapped
+>    coordinates. `setMagnetMode()` immediately re-invokes `setCrosshair({forceInvalidate: true})`.
+>    Related but distinct from the `crosshair_magnet` feature flag (which gates availability).
 
 ### SavedIndicator
 ```typescript
@@ -843,6 +1034,190 @@ is informational, not a required migration.
   unsubscribe(id), onSymbolPeriodChange?(symbol, period, active), dispose?() }
 ```
 
+### ScriptProvider
+
+Passed as `new Superchart({ scriptProvider })`. Verified against
+`src/lib/types/script.ts` at `4bd96aaf` (matches `$SUPERCHART_DIR/docs/scripts.md`).
+
+> **⛔ BLOCKER — `main` cannot run `@coinrayio/superchart-script` today**
+>
+> The npm package `@coinrayio/superchart-script@0.1.7` (the one the app installs)
+> was compiled against a **different, unmerged** Superchart. Its
+> `WasmScriptProvider` declares `language`, `defaultScript` and `EditorComponent`
+> on `ScriptProvider`, and its `reducePrimitives()` returns `PrimitiveSnapshot`.
+>
+> **None of that exists on `main`.** Those types were introduced by commit
+> `12b80231c53ce69c14fd5231113f41c4b80349de` ("feat: pluggable scripting —
+> primitive overlays + editor slot", 2026-06-16), which lives only on
+> `origin/feat/wasm-script-provider-example`. That branch also adds
+> `src/lib/types/primitive.ts` (`ScriptPrimitive`, `MarkerShape`,
+> `PrimitivePoint`, `PrimitiveSnapshot`), `IndicatorSubscription.onPrimitives?()`,
+> and a `ScriptEditorComponentProps` contract — and deletes the in-tree
+> `script-editor` widget.
+>
+> Divergence, not simple staleness: merge-base with `main` is `dcb4c417`
+> (2026-06-12); `main` has since gained **203 commits** the branch never
+> absorbed, and the branch's 2 commits have no equivalent on `main`
+> (`git cherry main origin/feat/wasm-script-provider-example` marks both `+`).
+> The locally built `dist-enterprise/` matches `main`, not the branch.
+>
+> **Consequences:** `WasmScriptProvider` fails to typecheck against the linked
+> SC (`PrimitiveSnapshot` and the three `ScriptProvider` members don't exist),
+> and at runtime `main`'s `SuperchartComponent` has no `onPrimitives` wiring and
+> no editor slot. Script-drawn primitives (`draw.*`) have **no rendering path on
+> `main` at all** — everything must go through `IndicatorMetadata.plots`.
+>
+> **Unblocking is the SC author's call, not ours:** either rebase and merge
+> `feat/wasm-script-provider-example` onto current `main`, or re-port the feature.
+> Re-verify this section before designing the SC scripting port.
+
+The contract below is `main`'s — i.e. what is actually available today.
+
+```typescript
+interface ScriptProvider {
+  compile(code: string, language: string): Promise<ScriptCompileResult>
+  executeAsIndicator(params: ScriptExecuteParams): Promise<IndicatorSubscription>
+  executeAsBot?(params: ScriptExecuteParams): Promise<BotSubscription>
+  stop(scriptId: string): Promise<void>
+  listScripts?(): Promise<ScriptInfo[]>
+  saveScript?(script: ScriptSaveParams): Promise<ScriptInfo>
+  deleteScript?(scriptId: string): Promise<void>
+  dispose?(): void
+}
+
+interface ScriptExecuteParams {
+  code: string
+  language: string                            // matched against ScriptLanguageDefinition.name
+  symbol: SymbolInfo
+  period: Period
+  settings?: Record<string, SettingValue>     // SettingValue = number | boolean | string
+}
+
+interface ScriptCompileResult {
+  success: boolean
+  errors?: ScriptDiagnostic[]
+  warnings?: ScriptDiagnostic[]
+  metadata?: IndicatorMetadata                // reuses the indicator metadata shape
+}
+
+interface ScriptDiagnostic {
+  line: number; column: number                // 1-based
+  endLine?: number; endColumn?: number
+  message: string
+  severity: 'error' | 'warning' | 'info'
+}
+
+interface ScriptInfo {
+  id: string; name: string; code: string; language: string
+  createdAt: number; updatedAt: number        // unix ms
+  description?: string
+}
+interface ScriptSaveParams { name: string; code: string; language: string; description?: string }
+
+interface BotSubscription {
+  botId: string
+  onSignal(handler: (signal: BotSignal) => void): void
+  onError?(handler: (error: Error) => void): void
+  dispose(): void
+}
+interface BotSignal {
+  type: 'buy' | 'sell' | 'close' | 'modify'
+  timestamp: number; price?: number; quantity?: number
+  stopLoss?: number; takeProfit?: number; metadata?: Record<string, unknown>
+}
+
+interface ScriptLanguageDefinition {
+  name: string
+  extension?: string
+  keywords: string[]
+  typeKeywords?: string[]
+  builtinFunctions: ScriptBuiltinFunction[]
+  builtinVariables?: ScriptBuiltinVariable[]
+  comments: { line?: string; blockStart?: string; blockEnd?: string }
+  operators?: string[]
+  stringDelimiters?: string[]
+}
+interface ScriptBuiltinFunction { name: string; description?: string; parameters?: ScriptFunctionParameter[]; returnType?: string }
+interface ScriptFunctionParameter { name: string; type: string; description?: string; optional?: boolean }
+interface ScriptBuiltinVariable { name: string; description?: string; type?: string }
+```
+
+### IndicatorSubscription / IndicatorMetadata / IndicatorDataPoint
+
+Shared by `IndicatorProvider` and `ScriptProvider` — `executeAsIndicator()` returns this.
+
+```typescript
+interface IndicatorSubscription {
+  indicatorId: string
+  metadata: IndicatorMetadata
+  onData(handler: (data: IndicatorDataPoint[]) => void): void      // full/initial dataset
+  onTick(handler: (data: IndicatorDataPoint) => void): void        // single real-time point
+  onHistory?(handler: (data: IndicatorDataPoint[]) => void): void  // backfill — MERGED, not replaced
+  onError?(handler: (error: Error) => void): void
+}
+
+interface IndicatorMetadata {
+  name: string; shortName: string; precision: number
+  paneId: string          // 'candle_pane' = overlay on price; any other string = its own pane
+  plots: IndicatorPlot[]
+  settings: IndicatorSettingDef[]
+  minValue?: number; maxValue?: number; logarithmic?: boolean
+}
+
+interface IndicatorDataPoint {
+  timestamp: number                             // unix MILLISECONDS
+  values: Record<string, number | null>         // plotId → value
+  colors?: Record<string, string>               // plotId → per-bar colour
+  shapes?: Record<string, boolean>              // plotId → show
+  texts?: Record<string, string>                // plotId → label
+  ohlc?: Record<string, {open: number; high: number; low: number; close: number}>  // plotcandle
+  bgcolor?: string
+}
+
+interface IndicatorSettingDef {
+  id: string; name: string
+  type: 'number' | 'boolean' | 'string' | 'color' | 'select'
+  defaultValue: SettingValue
+  min?: number; max?: number; step?: number
+  options?: {value: string; label: string}[]
+  group?: string
+}
+```
+
+### IndicatorPlot (all 9 variants)
+
+```typescript
+type IndicatorPlot = PlotLine | PlotHistogram | PlotHLine | PlotShape | PlotChar
+                   | PlotFill | PlotBgColor | PlotCandle | PlotArrow
+
+interface PlotLine      { type: 'plot'; id: string; title: string
+                          style: 'line'|'stepline'|'stepline_diamond'|'circles'|'cross'|'area'
+                          color: string; lineWidth?: number; offset?: number; transparency?: number }
+interface PlotHistogram { type: 'histogram'; id: string; title: string; color: string; histBase?: number }
+interface PlotHLine     { type: 'hline'; id: string; price: number; color: string
+                          lineStyle?: 'solid'|'dashed'|'dotted'; lineWidth?: number; title?: string }
+interface PlotShape     { type: 'plotshape'; id: string
+                          style: 'triangleup'|'triangledown'|'circle'|'cross'|'xcross'|'diamond'|'flag'
+                               | 'label_up'|'label_down'|'arrowup'|'arrowdown'|'square'
+                          location: 'abovebar'|'belowbar'|'top'|'bottom'|'absolute'
+                          color: string; size?: 'tiny'|'small'|'normal'|'large'|'huge'
+                          text?: string; textColor?: string; offset?: number }
+interface PlotChar      { type: 'plotchar'; id: string; char: string
+                          location: PlotShapeLocation; color: string; size?: PlotShapeSize; offset?: number }
+interface PlotFill      { type: 'fill'; id: string; plot1: string; plot2: string
+                          color: string; transparency?: number; title?: string }
+interface PlotBgColor   { type: 'bgcolor'; id: string; color: string; transparency?: number; title?: string }
+interface PlotCandle    { type: 'plotcandle'; id: string; colorUp: string; colorDown: string
+                          borderUp?: string; borderDown?: string; wickUp?: string; wickDown?: string; title?: string }
+interface PlotArrow     { type: 'plotarrow'; id: string; colorUp: string; colorDown: string
+                          offset?: number; minHeight?: number; maxHeight?: number }
+```
+
+SC converts these into a klinecharts custom indicator (`registerIndicator({figures, calc, draw})`)
+and paints the awkward kinds (`fill`, `plotshape`/`plotchar`, gap-connected sparse `plot`) with a
+hand-rolled canvas `draw` callback internal to `SuperchartComponent`. **A host never reimplements
+that** — it only has to produce correct `IndicatorMetadata` + `IndicatorDataPoint`.
+
 ### SetVisibleRangeError (new in 12e80de)
 ```typescript
 type SetVisibleRangeErrorCode = 'no_data_at_time' | 'unsupported_resolution' | 'aborted'
@@ -879,11 +1254,21 @@ type FeatureFlag =
   | 'drawing_templates'   // default true — UI shown when adapter also implements all 4 drawing template methods
   | 'chart_templates'     // default true — UI shown when adapter implements list/load/save/deleteChartTemplate
   | 'multi_chart_browser' // default true (reserved)
-  | 'volume_in_legend'    // default true
+  | 'volume_in_legend'    // default true — DEPRECATED in 9a8dc80, see below
   | 'last_close_price_line' // default true
   | 'settings_button'     // default true — gear/settings button in the period bar
-  | 'timezone_button'     // default true — timezone selector button in the period bar
+  | 'timezone_button'     // default FALSE since 9a8dc80 (was true) — see below
 ```
+
+> **BREAKING (SC `9a8dc80`): `timezone_button` now defaults to `false`.** The
+> period-bar timezone button was replaced by the new bottom-right
+> `TimezoneLauncher` widget. A host that wants the old button back must pass
+> `enabledFeatures: ['timezone_button']` explicitly.
+>
+> **`volume_in_legend` is deprecated.** It still works, but `resolveFeatures`
+> emits a one-time `console.warn` pointing at `preferences.statusLine.volume`
+> as the replacement.
+
 `disabledFeatures` wins over `enabledFeatures` when a flag appears in both.
 `drawing_bar` / `period_bar` flags control availability (binary); `drawingBarVisible` / `periodBarVisible` options control current visibility state (user-toggleable). Toolbar shows only when flag is `true` AND visibility is `true`.
 
@@ -1171,6 +1556,14 @@ setPeriod(period): void
 setZoomEnabled(enabled: boolean): void
 setScrollEnabled(enabled: boolean): void
 
+// Global crosshair magnet (new in coinray-chart bd92b49e) — NOT the overlay drag-magnet
+setMagnetMode(mode: 'normal' | 'weak' | 'strong'): void
+getMagnetMode(): 'normal' | 'weak' | 'strong'
+
+// X-axis seconds (new in coinray-chart 7d3cc38a)
+setShowSeconds(show: boolean): void   // call this one, not the Store-level setter — it repaints
+getShowSeconds(): boolean
+
 // Export
 getConvertPictureUrl(includeOverlay?: boolean, type?: 'png'|'jpeg'|'bmp', bg?: string): string
 ```
@@ -1370,6 +1763,39 @@ older saved states simply lack these keys and fall back to defaults. No migratio
 > `extendData.text` (previously it lived only in a volatile in-memory properties Map and was lost
 > on reload). Persisted `extendData` for these two types may now carry a `text` key it never had before.
 
+### Overlay drag constraints via `extendData` (coinray-chart `2633ab04` / `3dbccb91` / `9228235a`)
+
+These are read off `overlay.extendData` with an **untyped cast** — they are NOT on the
+typed `OverlayTemplate`/`OverlayCreate` interface, so TS will not help you. Set them with
+`chart.overrideOverlay({ id, extendData: { ... } })`.
+
+```typescript
+// Coordinate lock (2633ab04) — suppresses axis updates during per-point and whole-overlay drag
+{ lockPrice?: boolean, lockTime?: boolean }
+
+// Aspect-ratio drag (3dbccb91, 9228235a) — requires !lockPrice && !lockTime
+{
+  lockAspectRatio?: boolean
+  aspectRatio?: number                                   // > 0; required for 'boundingBox'
+  aspectRatioMode?: 'boundingBox' | 'similar' | 'angleAtVertex'
+  aspectRatioOffsets?: Array<{x: number, y: number}>     // 'similar' only; length === points.length
+  aspectRatioCentroid?: {x: number, y: number}           // 'similar' only
+  aspectRatioAngles?: number[]                           // 'angleAtVertex' only; triangles (points.length === 3)
+}
+```
+
+Modes:
+- `boundingBox` (default) — only the dragged vertex moves, anchored to the centroid of the
+  remaining points and scaled by `aspectRatio`.
+- `similar` — rotates + scales the whole shape around a captured centroid so it stays
+  geometrically similar.
+- `angleAtVertex` — triangle-only; constrains the dragged vertex to the arc on which it
+  subtends the stored interior angle (inscribed-angle theorem).
+
+> **The consumer owns the bookkeeping.** SC only *consumes* these fields. The host must
+> compute and stash `aspectRatioOffsets` / `aspectRatioCentroid` / `aspectRatioAngles`
+> itself (e.g. on flag-flip in a Coordinates tab) *before* setting `lockAspectRatio: true`.
+
 ### emojiMarker (now a real overlay, `2b25f9fb`)
 Single emoji (or `'svg:<path>'` glyph) at a point. **Moved** from Superchart's storybook-only
 `src/lib/extension/emojiMarker.ts` into coinray-chart as a registered `proExtensions` overlay —
@@ -1449,6 +1875,8 @@ Reverse-lookup from a klinecharts template name (format `BACKEND_<indicatorId>`)
 subscription.onHistory?.((points: IndicatorDataPoint[]) => void)
 ```
 Optional handler. Fires with historical backfill data. Unlike `onData` (which clears the store first), `onHistory` merges into the existing data store — preserving live data received before the backfill arrives.
+
+Full `IndicatorSubscription` / `IndicatorMetadata` / `IndicatorDataPoint` / `IndicatorPlot` shapes are under "ScriptProvider" above — the same types serve `IndicatorProvider` and `ScriptProvider`.
 
 ## Overlay `save` field (8c245a1)
 
@@ -1553,6 +1981,17 @@ resynced by the consumer — subscribe to `onReplayError` and read
 
 `sc.setSymbol(newSymbol)` automatically exits replay first (status → `idle`). No
 manual `setCurrentTime(null)` is required.
+
+### Replay init no longer flashes future price (coinray-chart `52332ceb`)
+
+Behaviour fix, no API change. Previously, during an engine-driven init load while in
+playback mode, the raw candle straddling the replay cursor was painted briefly before the
+sub-resolution partial replaced it — flashing price action from *past* the cursor onto the
+screen. Now `Store._addData` checks `ReplayEngine.isAwaitingInit()` and skips its own paint;
+`ReplayEngine._triggerDeferredLayout` does the full paint instead (visible range, crosshair,
+indicators via `_recalcIndicators`, layout). Boundary-fetch also now runs *before*
+buffer-fetch and merges into rather than overwrites the buffer, so the boundary candle
+survives. Affects replay init and period-change flows only.
 
 ### Datafeed prerequisites for replay
 

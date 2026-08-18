@@ -1,8 +1,9 @@
 # Superchart Usage Patterns
 
 > Source: `$SUPERCHART_DIR` (example app + source, branch: main)
-> Superchart git hash: `44be3f64d106dc7d83ec4b914392e3abfcb1b1f7`
-> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `174b32443ccb2543963d8b6ba9be80baefd857f6`
+> Superchart git hash: `4bd96aaf2c69b7badbca0e9f93bc4d571e1080c6`
+> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `52332cebd7f8e1f06983a00544258057020cce98`
+> Hashes verified current: 2026-08-18.
 > Do NOT explore source — use this doc instead.
 
 ## Package rename (SC `474f052`)
@@ -77,6 +78,150 @@ container (`--superchart-brand-color`, `--superchart-brand-background`,
 etc.) — no need to touch the component. If the app ever wants to fully
 suppress the watermark, set `brand: false` on the constructor (works
 today via the enterprise symlink).
+
+## Design-system migration (SC `44be3f64` → `4bd96aaf`, PRs #107–#115)
+
+The bulk of this range is an internal rebuild of SC's chrome on a Tailwind-based
+design system. Almost nothing about the public API changed — but **one new host
+action is mandatory**.
+
+### REQUIRED: load Font Awesome yourself
+
+```javascript
+import "@fortawesome/fontawesome-free/css/all.min.css"   // or a CDN <link>
+```
+
+SC's DS `Icon` component renders Font Awesome 6+ Free glyphs and the font is
+**not bundled** — its relative `@font-face` URLs don't survive relocation into
+`dist`. Without this import every icon in the chart chrome renders as an empty
+box. The SC author marks this as temporary: it goes away once icons migrate to
+inline SVG (`uiIcons` / `chartIcons` in `src/design-system/icons/`), with no API
+change expected then.
+
+### Stylesheet — same import, different contents
+
+```javascript
+import "@coinrayio/superchart/styles"      // unchanged import string
+```
+
+Resolves to `dist-enterprise/superchart.css`, which is now the DS token/utility
+layer concatenated with the legacy LESS output (DS first — the order is
+load-bearing for `@layer` precedence). A host that already had this line needs
+no change for basic styling.
+
+`@coinrayio/superchart/ui.css` is a new standalone DS-only sheet.
+**Do not load it alongside `/styles`** — it is for consumers who want the
+component CSS on its own.
+
+> Only relevant if you build SC from source instead of consuming the package:
+> you must now also load `src/design-system/styles/index.css` (or the
+> Tailwind-built `superchart-ui.css`) next to `index.less`, or every
+> `--color-*` resolves to empty string and the chrome renders unstyled. This
+> bit SC's own `examples/client` (fixed in `3e133b4`).
+
+### Optional webfonts
+
+Typography degrades gracefully to the platform UI font if these are skipped:
+
+```javascript
+import "@fontsource/roboto/400.css"
+import "@fontsource/roboto/500.css"
+import "@fontsource/plus-jakarta-sans/600.css"
+import "@fontsource/roboto-mono/400.css"
+```
+
+### No wrapper element or new option needed
+
+SC sets `data-theme="{theme}"` on the `.superchart` root itself
+(`SuperchartComponent.tsx:940`) and copies it onto portalled popovers (colour
+picker, timezone launcher, indicator-templates dropdown). Hosts do **not** add
+it. No new constructor option, no required wrapper.
+
+### Token layer, and how to override brand colours
+
+Two theme conventions coexist, bridged rather than merged:
+
+- **DS convention** — dark is the `:root` default, `.light` overrides.
+- **Chart convention** — light is the default, `[data-theme="dark"|"light"]`
+  overrides.
+
+`design-system/styles/theme.css` and `elevation.css` therefore match both:
+`.light, [data-theme="light"]`. Dark needs no override (it *is* the `:root`
+default).
+
+Legacy `--superchart-*` variables still work — `src/lib/base.less:42` aliases
+them onto DS tokens, declared on **both** `:root` and `[data-theme]`:
+
+```less
+:root,
+[data-theme] {
+  --superchart-primary-color:      var(--color-brand-default);
+  --superchart-background-color:   var(--color-surface-pane);
+  --superchart-text-color:         var(--color-text-primary);
+  --superchart-border-color:       var(--color-border-primary);
+  --superchart-popup-shadow-color: var(--shadow-popup-color);
+  /* ~15 more --superchart-* → --color-* aliases */
+}
+```
+
+(Declaring on `[data-theme]` too was a real fix — `3b3287c`. Custom properties
+substitute in the scope where they're *declared*, not consumed, so a `:root`-only
+alias froze at the dark value regardless of the chart's own theme.)
+
+**Canvas colours** can't read CSS vars — klinecharts paints on a canvas. SC
+bridges them: `theme/chartTokens.ts` lists 31 named tokens (`--color-<name>`),
+e.g. `positive-default`, `negative-default`, `neutral-default`, `grid-line`,
+`grid-axis-line`, `grid-axis-tick`, `grid-axis-text`, `crosshair-line`,
+`crosshair-label-bg`, `crosshair-label-text`, `brand-default`, `brand-subtle`,
+`brand-subtler`, `drawing-default`, `drawing-fill`, `drawing-handle-fill`,
+`drawing-handle-border`, `series-2-orange`, `series-7-blue`, `series-8-purple`,
+`series-9-pink`, `series-10-teal`, … `resolveChartTokens(el)` reads them via
+`getComputedStyle` **off the chart root element** (so `data-theme` and any host
+override on an ancestor are in scope), with dark literals as first-paint
+fallbacks. `theme/chartStyles.ts` maps them onto all 76 klinecharts colour keys,
+applied as `chart.setStyles(dsChartStyles(tokens))`.
+
+**To override a brand colour:** set `--color-<token>` (e.g.
+`--color-brand-default`, `--color-positive-default`) on any ancestor of
+`.superchart`. Resolution is runtime, so the canvas follows — but only on the
+next `[theme, styles]`-keyed repaint, i.e. a `setTheme()` / theme-prop change or
+a `styleOverrides` / `setStyles()` call. An arbitrary CSS-variable mutation does
+**not** repaint the canvas by itself.
+
+### `setTheme()` behaviour changed underneath
+
+Signature unchanged (`theme: 'light' | 'dark' | <custom>`, `setTheme()`,
+`getTheme()`). Mechanism changed: SC used to call `chart.setStyles(theme)` with
+klinecharts' registered `dark`/`light` style objects; it now sets `data-theme`
+and resolves DS tokens as above (`ChartWidget.tsx:297`, deps `[theme, styles]`).
+Persisted `styleOverrides`/`styles` are re-applied *last* so they still win
+(`ChartWidget.tsx:339`).
+
+> **Gotcha:** a custom theme name registered via klinecharts `registerStyles`
+> still drives the klinecharts-native path, but the DS token layer only
+> special-cases the literal string `"light"`. Any custom theme name that isn't
+> exactly `"light"` gets **dark-palette** chrome and canvas.
+
+### Not migrated — won't-do (`1e88440`)
+
+Per-overlay accent colours stay hardcoded hex in the coinray-chart engine and
+are **not** reachable via `--color-*` tokens: Fibonacci level colours,
+`priceLine` / `tradeLine`, and `DEFAULT_OVERLAY_PROPERTIES` (~70 hexes across
+`extension/overlay/**` and `common/Styles.ts:382`). The engine paints at draw
+time with no CSS-var access, and its 10-level fibonacci ratio set doesn't map
+onto the DS's 8 fibonacci tokens. The only lever is the pre-existing
+`styleOverrides` / `setStyles` API, and only where the engine exposes the field.
+
+### TopBar swap has NOT landed
+
+The DS `TopBar` exists but the `period-bar` → `TopBar` mount swap (R4.1d) is
+still reverted/pending as of `4bd96aaf`. The legacy `period-bar` is what mounts,
+so the Period Bar API (`chart.createButton` / `createDropdown`,
+`onToolbarReady`) documented below is unaffected. Two notes for when it does
+land: labels became host-overridable via `labels?: Partial<TopBarLabels>`
+(`b9bf059`, after the localisation blocker `c5e01eb`), and there is an
+unresolved question about consumer buttons injected via `onToolbarReady`
+rendering unstyled inside the DS bar's `.ds-root` reset scope.
 
 ## Dependencies
 
@@ -637,6 +782,127 @@ getFirstCandleTime(symbolName, resolution, callback) {
 - Order placement forms (price shown is historical)
 - Alert triggers based on chart price
 - Provide a visible "Exit Replay" / "Go Live" button that calls `sc.replay.setCurrentTime(null)`
+
+## Scripting (`scriptProvider`) — lifecycle and gaps
+
+> **⛔ Read the BLOCKER box in `SUPERCHART_API.md` → "ScriptProvider" first.**
+> `@coinrayio/superchart-script@0.1.7` was built against an unmerged SC branch
+> (`feat/wasm-script-provider-example`) and does not compile or run against
+> `main`. Everything below describes `main`'s actual, weaker contract.
+
+Types are in `SUPERCHART_API.md` → "ScriptProvider". This section is what SC
+actually *does* with the provider, verified at `4bd96aaf` in
+`src/lib/components/SuperchartComponent.tsx`. Several documented-looking
+capabilities are not wired — read this before designing against the interface.
+
+### Call order
+
+1. `new Superchart({ scriptProvider })` — stored in the chart store
+   (`chartStore.ts:500`). **Presence alone makes the `fx` toolbar button appear**
+   (`SuperchartComponent.tsx:979`). No feature flag gates it.
+2. User clicks `fx`, or the host calls `chart.openScriptEditor()` → SC's built-in
+   `<ScriptEditor>` panel mounts.
+3. User clicks **Add to Chart** → SC calls
+   `scriptProvider.executeAsIndicator({code, language: 'pine', symbol, period})`.
+4. SC builds klinecharts `figures[]` + `calc`/`draw` from
+   `subscription.metadata.plots`, calls `registerIndicator({name: 'SCRIPT_<indicatorId>', …})`
+   and `chart.createIndicator(...)`.
+5. SC wires `onData` / `onTick` / `onHistory?` / `onError?` into a local
+   `Map<timestamp, IndicatorDataPoint>` that `calc` reads. Every handler ends with
+   `chart.overrideIndicator({name})` to force a repaint.
+6. `stop(scriptId)` fires **only** when the user clicks the ✕ on the indicator in
+   the pane legend, gated on `name.startsWith('SCRIPT_')`
+   (`SuperchartComponent.tsx:641-649`).
+7. `chart.dispose()` calls `scriptProvider.dispose?()` **once**
+   (`Superchart.ts:1148-1151`) — it does *not* iterate and `stop()` each running
+   script.
+
+### What SC does NOT do — the host must
+
+| Gap | Consequence |
+|---|---|
+| **`compile()` is never called by SC.** The built-in `<ScriptEditor>` doesn't import the provider at all; it's exercised only by the storybook mock. | No compile-on-keystroke diagnostics out of the box. The host drives compilation itself. |
+| **Nothing happens on symbol/period change.** `ScriptProvider` has no `onSymbolPeriodChange` (unlike `IndicatorProvider`, `indicator.ts:70`). | SC keeps painting stale script output against the new candle set. The host must listen to `chart.onSymbolChange` / `onPeriodChange` and stop + re-execute. |
+| **`stop()` is not called on symbol/period change, nor per-script on dispose.** | The host's provider must track every running `scriptId` and clean them up in `dispose()`. |
+| **`settings` is never passed to `executeAsIndicator`** — always `undefined`. | Script inputs cannot be seeded from SC. |
+| **`ScriptProvider` has no `updateSettings`** (unlike `IndicatorProvider`), and `IndicatorSettingModal` is never given `backendSettings` for script indicators. | No in-place settings edit. Changing a script input = `stop(oldId)` + `executeAsIndicator(newParams)` + manually remove/re-add the klinecharts indicator. **This is the TV-parity gap for `param.int` / `param.float`.** |
+| **`listScripts` / `saveScript` / `deleteScript` are unconsumed.** The panel's Save button only `console.log`s. | Implementing them buys nothing unless the host builds its own UI. |
+| **No way to suppress SC's built-in editor** while still using `scriptProvider` for execution. The `fx` button auto-appears whenever `scriptProvider` is truthy; there is no `SuperchartOptions` flag. | Relevant to Altrady: the decision is to keep Altrady's own IDE and *not* expose SC's editor. There is currently no supported way to hide it. |
+| **No free-form drawing primitives.** `main` has no `PrimitiveSnapshot` / `onPrimitives` — the unmerged branch added them. | Script `draw.*` output has no rendering path. Everything must be expressed as `IndicatorMetadata.plots`, which cannot represent arbitrary lines/boxes/labels. |
+| **No way to pass a custom `ScriptLanguageDefinition`.** The type is exported and `<ScriptEditor>` takes a `language?` prop, but `SuperchartComponent` never passes it — it always falls back to the bundled Pine v4/v5/v6 definition (`script-editor/defaultLanguage.ts`). | A `@coinray/strategy` language definition cannot reach SC's editor. |
+
+All eight are **SC API requests**, not things to patch in the SC repo.
+
+### `openScriptEditor` / `closeScriptEditor`
+
+```javascript
+chart.openScriptEditor({ initialCode, readOnly })   // readOnly → view + "Clone & Edit"
+chart.closeScriptEditor()
+```
+
+Functional only when `scriptProvider` was passed to the constructor.
+
+### CodeMirror is a real optional peer dep (SC `2682f8f`)
+
+`createLanguageExtension(...)` became **async**: CodeMirror imports
+(`@codemirror/language`, `/autocomplete`, `/view`, `/lint`, `@lezer/highlight`)
+are now dynamic and memoised, so a consumer's bundler doesn't have to resolve
+them unless the editor actually opens.
+
+> **Gotcha:** if those packages aren't in `node_modules`, the dynamic import
+> throws, is caught (`script-editor/index.tsx:275/297`), and the editor silently
+> degrades to a plain `<textarea>` — no highlighting, no autocomplete, no lint,
+> and no obvious error. Looks broken without explaining why.
+
+### Colours
+
+`IndicatorMetadata.plots[].color` comes from the script / backend response, not
+from `chartColors`. Unlike overlays, there is no theme-derived colour
+convention to follow here.
+
+## New always-on widgets (design-system range)
+
+Three widgets now mount unconditionally — **no feature flag, no host opt-in**:
+
+- **`TimezoneLauncher`** — bottom-right pill inside `BottomBar`
+  (`SuperchartComponent.tsx:1138-1150`). It *replaces* the period-bar timezone
+  button, which is why `timezone_button` now defaults to `false`. SC updates
+  `store.setTimezone` / `setFollowExchangeTimezone` internally before its
+  `onSelect` fires.
+- **`BottomBar`** — a trivial layout shell; currently hosts only the launcher.
+- **`FavoritesBar`** — renders `null` until the user stars a tool in the drawing
+  bar. Persists to `ChartState.favoriteTools` / `favoritesBarPosition`.
+
+**`useOverlayClipboard`** also ships automatically (document-level
+`paste`/`dragover`/`drop` + `Mod+C` for overlays, images, emoji, text). No props,
+no flag, self-cleaning. Nothing for a host to do — but be aware SC now installs
+document-level listeners.
+
+**Indicator-templates browser** lights up when `study_templates` (default `true`)
+is on **and** the host's `StorageAdapter` implements both `listStudyTemplates`
+and `loadStudyTemplate`. Those are pre-existing optional methods; they're just
+newly called with `indicatorName` omitted (fetch-all).
+
+> **`DsTopBar` is dead code.** `widget/top-bar/` was built in this range but is
+> imported nowhere — `SuperchartComponent` still mounts the legacy `PeriodBar`,
+> so the Period Bar API below (`createButton` / `createDropdown` /
+> `onToolbarReady`) is unaffected. Its doc comment mentions a `ds_top_bar`
+> feature flag; no such flag exists. Treat `top-bar/` as a preview of a future
+> migration, not as API.
+
+### Settings modal rewrite — what it means for a host
+
+Fields now declare `scope: 'styles' | 'preferences'`. `styles` fields diff into
+`chart.setStyles` (100 ms debounce); `preferences` fields route to
+`setPreference(path, value)` → the existing `ChartPreferences` blob → the
+existing `StorageAdapter.saveChartState`. **No new StorageAdapter method is
+required** — the new settings just live inside a blob the host already stores
+opaquely.
+
+The one genuinely new host-facing requirement: the **Events tab only appears if
+the datafeed implements `getEvents?()`**, and it is additionally hidden for
+crypto markets (crypto is in `NON_STOCK_MARKETS`). For Altrady it will stay
+hidden — fine to ignore.
 
 ## Feature Flags
 

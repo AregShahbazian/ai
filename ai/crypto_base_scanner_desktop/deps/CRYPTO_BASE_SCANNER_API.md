@@ -2,6 +2,7 @@
 
 > Source: `$CRYPTO_BASE_SCANNER_DIR` (branch: master)
 > Git hash: `797fb904631e6c68e7c644e4f32b32c115384cd5`
+> Hashes verified current: 2026-08-18.
 > Do NOT explore source — use this doc instead.
 
 ## Overview

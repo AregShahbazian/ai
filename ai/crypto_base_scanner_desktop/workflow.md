@@ -10,20 +10,23 @@ Pre-built API reference docs live in `~/ai/crypto_base_scanner_desktop/deps/`:
 - **`SUPERCHART_USAGE.md`** — Initialization, datafeed wiring, symbol/period change, cleanup, gotchas
 - **`COINRAYJS_API.md`** — CoinrayCache singleton, fetchCandles, subscribeCandles, Market/Exchange shapes
 - **`CRYPTO_BASE_SCANNER_API.md`** — Rails backend REST API (V3 endpoints, models, services)
+- **`COINRAY_REST_API.md`** — coinray_rest monorepo: the `@coinrayio/superchart-script` package surface (WasmScriptProvider, engine, editor) + the strategy compile endpoint + ta_wasm
+- **`COINRAY_SCRIPT_LANGUAGE.md`** — the `@coinray/strategy` scripting language a user writes (config/param/src/ta/plot/strategy/draw), sandbox limits
 
 ### Rules
 
-1. **Do NOT explore library source.** Read these docs instead of browsing `node_modules/superchart`, `$SUPERCHART_DIR`, `$COINRAYJS_DIR`, or `$CRYPTO_BASE_SCANNER_DIR`.
-2. **Staleness check.** On first read per session, verify git hashes match. All four repos track their default branch:
+1. **Do NOT explore library source.** Read these docs instead of browsing `node_modules/superchart`, `$SUPERCHART_DIR`, `$COINRAYJS_DIR`, `$CRYPTO_BASE_SCANNER_DIR`, or `$COINRAY_REST_DIR`.
+2. **Staleness check.** On first read per session, verify git hashes match. All five repos track their default branch:
    - Superchart: `main` — `git -C $SUPERCHART_DIR rev-parse HEAD` vs Superchart hash in `SUPERCHART_API.md`
    - coinray-chart: `main` — `git -C $SUPERCHART_DIR/packages/coinray-chart rev-parse HEAD` vs coinray-chart hash in `SUPERCHART_API.md`
    - CoinrayJS: `master` — `git -C $COINRAYJS_DIR rev-parse HEAD` vs hash in `COINRAYJS_API.md`
    - Backend: `master` — `git -C $CRYPTO_BASE_SCANNER_DIR rev-parse HEAD` vs hash in `CRYPTO_BASE_SCANNER_API.md`
+   - coinray_rest: `master` — `git -C $COINRAY_REST_DIR rev-parse HEAD` vs hash in `COINRAY_REST_API.md` and `COINRAY_SCRIPT_LANGUAGE.md` (both track the same repo — check once)
    - `SUPERCHART_API.md` and `SUPERCHART_USAGE.md` track both Superchart and coinray-chart hashes — check once per repo.
    - If hashes differ, explore only the changed files (`git diff <old>..<new> --name-only`) and patch the docs.
    - A PreToolUse hook at `~/.claude/hooks/check-deps-staleness.sh` auto-warns on Read/Grep of these docs when hashes are stale.
 3. **Superchart has its own `docs/` folder** at `$SUPERCHART_DIR/docs/` (`api-reference`, `data-loading`, `indicators`, `overlays`, `replay`, `scripts`, `storage`, `customization`, `index`). When updating `SUPERCHART_API.md` / `SUPERCHART_USAGE.md`, read those docs alongside the latest source — they are maintained by the SC author and are the primary source of truth. Fall back to source only where docs are incomplete or out of date.
-4. **Resolve `$SUPERCHART_DIR` / `$COINRAYJS_DIR` / `$CRYPTO_BASE_SCANNER_DIR`** by reading `~/ai/crypto_base_scanner_desktop/local.config` at the start of a session.
+4. **Resolve `$SUPERCHART_DIR` / `$COINRAYJS_DIR` / `$CRYPTO_BASE_SCANNER_DIR` / `$COINRAY_REST_DIR`** by reading `~/ai/crypto_base_scanner_desktop/local.config` at the start of a session.
 
 ## Dev server
 
