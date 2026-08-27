@@ -5,3 +5,4 @@
 - [orion: dev stack & map plugin](project_orion_dev_stack.md) — web-first dev, maplibre_gl v0.26.1, iOS deferred; Phase 1 PRD at ~/ai/orion/phase-1/prd.md
 - [Altrady freelance situation](user_altrady_situation.md) — €25/hr since 2018, ~28h/wk, ~€33k/yr incl. bonus; rate anchor €50–60, options GROW/CAP/TAPER/BRIDGE; doc ~/ai/career/altrady-rate-negotiation.md
 - [User runs long jobs himself](feedback_user_runs_generation.md) — set up scripts, hand over the command; don't launch generation/downloads unasked
+- [Laptop slow triage](reference_laptop_slow_triage.md) — 3 known causes, test under load first; details in ~/.claude/system.md
