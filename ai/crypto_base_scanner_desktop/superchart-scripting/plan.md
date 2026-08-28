@@ -79,6 +79,35 @@ suppress flag — worth settling with Benoist *before* writing code.
   discards the server's `alerts` array, so an alert picker must read
   `host.declaredAlerts` after `load()`.
 
+### Architecture principle — provider-agnostic by default (binding, all phases)
+
+Scripting is a **chart-agnostic feature**. TradingView and SuperChart are two
+renderings of the same thing, and the code must say so. This holds for every
+phase, not just phase 1 — re-read it before designing each one.
+
+1. **One flow, not two.** Compile, run, re-run, stop, symbol change, cleanup —
+   the *policy* is provider-neutral and written once. Only the *mechanism*
+   differs per provider.
+2. **Minimum duplicated code.** If both providers need the same logic, it lives
+   in the neutral layer. Two near-identical blocks in two adapters is a defect,
+   not a coincidence.
+3. **Provider-specific code lives in provider-specific modules.** TV code under
+   the TV chart tree, SC code under the SC chart tree. Nothing provider-specific
+   in the shared scripts modules — no TV concepts leaking into neutral names,
+   no SC concepts either.
+4. **No provider branching outside those modules.** Prefer *structural*
+   selection — a module mounts only under its own provider — over
+   `if (chartProvider === …)`. A branch is a last resort, and it belongs in the
+   bridge, never in the IDE or a feature module.
+5. **Symmetry.** The two adapters expose the same surface to the bridge, and sit
+   at mirrored paths. Asymmetry is the early warning that something neutral has
+   drifted into one side.
+6. **A third provider is additive.** Adding one should mean writing one adapter
+   and one renderer — touching no IDE code, and ideally no bridge code either.
+
+The payoff is that a future fix is either "neutral, fixes both" or "this
+provider only", and you can tell which from where the file lives.
+
 ### Phases
 Agreed 2026-08-28. Each phase gets its own PRD in this folder when it starts.
 All 15 capability-matrix rows must work eventually; the split is about ordering,
@@ -122,7 +151,8 @@ republishing per change (as was done for the `declare_alert` fix).
 
 ### Cross-repo agent delegation (agreed 2026-08-28)
 
-The port spans three repos. Rather than one session editing all of them,
+Generalised since — this is now the standing method for any multi-repo PRD;
+see `~/ai/workflow.md` -> "Multi-repo work". The port spans three repos. Rather than one session editing all of them,
 **each repo gets its own Claude session, started in that repo's root.** The
 session working in `crypto_base_scanner_desktop` coordinates; it delegates the
 SC and coinray_rest work to those sessions by message.

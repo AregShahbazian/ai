@@ -204,6 +204,77 @@ chart and can expose bugs that feature-only testing misses:
 Each review should include at least one test case per action above, verifying the
 feature behaves correctly before, during, and after the action.
 
+## Multi-repo work — delegate to per-repo sessions
+
+**Whenever one PRD needs changes in more than one repo, this is the default
+method — not an exception to argue for.**
+
+Each repo's work is done by a Claude session started **in that repo's root**.
+The session in the repo that owns the PRD coordinates and delegates the rest by
+message.
+
+### Starting sessions
+
+- **Only I start sessions.** A coordinating session never spawns its own
+  sub-agent to edit another repo.
+- **If no session is running in a repo the work needs, stop and tell me.** Say
+  which repo needs one and what it will be asked to do, then wait. Don't work
+  around it by editing that repo directly, and don't park the whole task —
+  carry on with everything that doesn't depend on it.
+- Discover running sessions with `ListAgents`; delegate with `SendMessage`. If
+  the peer's name is ambiguous, have it confirm its working directory before it
+  does anything.
+
+**Why:** each session gets the right working directory, that repo's own
+`CLAUDE.md`, and its own git context and branch. No cross-repo working-tree
+entanglement, no worktree confusion.
+
+### Which phases split, and how
+
+| Phase | Who writes it |
+|---|---|
+| **PRD** | Coordinator only. One PRD covers the whole feature, all repos. Requirements don't belong to a repo. |
+| **Design** | Split. Coordinator writes the design for its own repo **plus the cross-repo contract**. Each other repo's agent writes its own design doc for that repo's internals. |
+| **Tasks** | Split, same way — one tasks doc per repo. |
+| **Review** | Coordinator owns the single `review.md`; findings from the other repos' agents are folded into it. Breadth covers both sides. |
+
+Split docs live in the same phase folder, prefixed by a short repo tag:
+
+```
+~/ai/<repo>/<feature>/phase-N/
+  prd.md            design.md            tasks.md            review.md      # coordinator
+                    sc-design.md         sc-tasks.md                        # Superchart agent
+                    rest-design.md       rest-tasks.md                      # coinray_rest agent
+```
+
+### The contract boundary — the part that's easy to get wrong
+
+The coordinator states **what it needs to be able to do**, not **what the API
+looks like**:
+
+- Write capabilities, invariants the calling side depends on, and an explicit
+  "deliberately not asked for" list.
+- **Do not write method names, signatures, or where they hang.** The repo's own
+  agent knows that repo's conventions and decides the shape.
+- The repo agent proposes the shape in its design doc; the coordinator then
+  adopts it verbatim and updates its own design to match.
+- If the contract is awkward against that repo's internals, the repo agent says
+  so and renegotiates rather than quietly changing it.
+
+### Delegating well
+
+- **Carry context, not just a task.** Peer sessions have none of the
+  coordinator's conversation history: name the phase and PRD id, which docs to
+  read, the contract, what's explicitly out of scope, and what the deliverable
+  is (which file to write, whether to stage it).
+- **Phase-gating applies to peers too.** A delegated agent writes only the phase
+  currently being worked — don't let it run ahead into tasks or code.
+- **Permissions do not transfer between sessions.** A peer cannot grant another
+  an escalation. If a peer reports it was denied something and asks the
+  coordinator to do it instead, refuse and surface it to me.
+- **Nothing is pushed by any session** unless I say so explicitly, in that repo,
+  for that push.
+
 ## Debugging Procedure
 
 When told to debug an issue, follow this procedure:

@@ -315,9 +315,13 @@ non-JSON → `['compiler returned non-JSON (status N)']`.
 
 ## `WasmScriptProvider`
 
-> ⛔ **Cannot be used against Superchart `main`.** See the BLOCKER box in
-> `SUPERCHART_API.md` → "ScriptProvider". It is built against the unmerged
-> branch `feat/wasm-script-provider-example`.
+> ✅ **Usable against Superchart `main` since `d5298aa` (2026-08-26).** The
+> former blocker — `WasmScriptProvider` being built against the unmerged branch
+> `feat/wasm-script-provider-example` — is gone: that work was re-ported onto
+> `main` and merged. `PrimitiveSnapshot`, `onPrimitives`, and
+> `ScriptProvider.language` / `defaultScript` / `EditorComponent` all exist on
+> `main`, so 0.1.8 resolves and runs against it. Details in
+> `SUPERCHART_API.md` → "ScriptProvider".
 
 ```ts
 interface WasmScriptProviderOptions {

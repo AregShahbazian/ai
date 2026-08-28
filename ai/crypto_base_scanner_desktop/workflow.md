@@ -61,6 +61,27 @@ Full reference — URLs, `storeGlobal` objects, DOM selectors, snippets:
 - Measuring DOM layout (widths, heights, positions)
 - Confirming a global is wired up correctly after a code change
 
+## Multi-repo PRDs — which session owns what
+
+The general rule is in `~/ai/workflow.md` -> "Multi-repo work — delegate to
+per-repo sessions". This repo is almost always the **coordinator**: the PRD and
+the workflow docs live under `~/ai/crypto_base_scanner_desktop/`, even when the
+change lands elsewhere.
+
+Repo tags used for split design/tasks docs:
+
+| Repo | Root | Doc prefix |
+|---|---|---|
+| crypto_base_scanner_desktop | this repo | *(none — the coordinator's docs)* |
+| Superchart | `$SUPERCHART_DIR` | `sc-` |
+| coinray_rest | `$COINRAY_REST_DIR` | `rest-` |
+| coinrayjs | `$COINRAYJS_DIR` | `crjs-` |
+| crypto_base_scanner (backend) | `$CRYPTO_BASE_SCANNER_DIR` | `be-` |
+
+The `sc-source-explorer` sub-agent stays read-only reconnaissance. **It is not a
+substitute for a delegated Superchart session** — anything that changes SC goes
+to a session Areg started in `$SUPERCHART_DIR`.
+
 ## Related personal agents
 
 - `sc-source-explorer` (`~/.claude/agents/`) — investigates Superchart / coinray-chart source and returns concise summaries so the main thread never reads SC source directly.
