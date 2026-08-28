@@ -1,8 +1,8 @@
 # coinray_rest Reference — scripting stack
 
 > Source: `$COINRAY_REST_DIR` (branch: master)
-> Git hash: `bca89035eae3e13543e877e57297c54b7c079883`
-> Hashes verified current: 2026-08-18.
+> Git hash: `87ba31b633e951212f784285680ca8654b6d716d` (2026-08-26)
+> Hashes verified current: 2026-08-28.
 > Do NOT explore source — use this doc instead.
 
 Scope: the parts of the coinray_rest monorepo the desktop app consumes — the
@@ -23,13 +23,27 @@ The scripting *language* has its own doc: `COINRAY_SCRIPT_LANGUAGE.md`.
 
 # A. `@coinrayio/superchart-script`
 
-`packages/superchart-script/`, **v0.1.7**, ESM-first, published to GitHub
+`packages/superchart-script/`, **v0.1.8**, ESM-first, published to GitHub
 Packages (`npm.pkg.github.com`, restricted). Install needs a `read:packages`
 token on `coinrayio` in `~/.npmrc`.
 
-> **Master ≠ published 0.1.7.** Two feature commits landed without a version
-> bump: `975b1598` (Options/enum dropdown param, 2026-06-28) and `8bcbd601`
-> (helper `modules` through the compile transport).
+> **Master == published 0.1.8** at this HEAD — `4e4a5175` (2026-08-26) both
+> implemented `declare_alert` in the browser host and bumped the version, and
+> nothing has touched the package since. 0.1.8 is on the registry (the app's
+> `yarn.lock` resolves it).
+>
+> **Publishing is manual.** `.github/workflows/publish-superchart-script.yml`
+> was reduced to `workflow_dispatch:` on 2026-08-26 (`87ba31b6`); the
+> `push: tags: superchart-script-v*` trigger is gone. It can't work as written
+> because the package declares
+> `"@coinrayio/superchart": "link:../../../Superchart/dist-enterprise"`, a path
+> that doesn't exist on a runner, so `tsc --emitDeclarationOnly` fails with
+> `TS2307: Cannot find module '@coinrayio/superchart'`. **No `superchart-script-v*`
+> tag has ever published successfully** — 0.1.7 and 0.1.8 were both published by
+> hand:
+> ```
+> cd packages/superchart-script && pnpm run build && npm publish   # needs write:packages
+> ```
 
 ## Entry points — exactly three
 
@@ -161,6 +175,7 @@ class StrategyHost {
   t: number                        // current bar index, -1 initially
   isNewBar: boolean
   failure: string | null
+  declaredAlerts: string[]         // names from declare_alert, deduped, declaration order
   confirmedEvents: HostEvent[]
   confirmedThrough: number         // highest bar driven as confirmed, -1 initially
 
@@ -202,17 +217,29 @@ and recompute.
 | bar/series | `is_new_bar`, `bar_index`, `bar_time`, `series_len`, `series_get` |
 | TA | `ta_sma ta_stdev ta_ema ta_rma ta_wma ta_rsi ta_highest ta_lowest ta_change ta_mom ta_roc ta_cmo ta_cog ta_vwma ta_mfi ta_bb ta_macd ta_tr ta_atr ta_cci ta_wpr ta_stoch_k` |
 | params | `param_decl_f64/_i64/_bool/_options`, `declare_warmup`, `param_f64`, `param_bool` |
-| events | `emit_alert`, `log`, `plot`, `plot_pane` |
+| events | `declare_alert`, `emit_alert`, `log`, `plot`, `plot_pane` |
 | orders | `order_submit_simple`, `order_submit_json`, `order_close`, `order_close_all` |
 | primitives | `plot_marker`, `plot_line`, `plot_box`, `plot_label`, `primitive_delete` |
 
-> **🚨 `env.declare_alert` is MISSING from the browser host.** The SDK gained
-> `declareAlert()` in `4d5ea2d4` (2026-07-01), after the host's last touch
-> (`975b1598`, 2026-06-28). AssemblyScript only emits an import when referenced,
-> so a script calling `declareAlert(...)` **compiles fine server-side but fails
-> to instantiate in the browser** with `LinkError: unknown import:
-> env.declare_alert`. Either avoid `declareAlert` in scripts, or shim it
-> (`declare_alert: () => {}`) until it's fixed upstream.
+> **✅ `env.declare_alert` is implemented since 0.1.8** (`4e4a5175`, 2026-08-26).
+> Before that it was missing, and any script calling `declareAlert(...)` compiled
+> fine server-side but died in the browser with
+> `LinkError: Import #6 "env" "declare_alert": function import requires a callable`
+> — plots included. **If you are pinned below 0.1.8, that LinkError is still the
+> symptom** and the workaround is `declare_alert: () => {}`.
+>
+> How it works: `declare_alert(ptr, len)` runs in the guest's **start section**,
+> before `this.guest` is assigned, so the memory export is unreachable at call
+> time (same reason `param_decl_*` ignore their ptr/len). The host stashes
+> `[ptr, len]` in `_pendingAlerts` and resolves the strings in
+> `_flushDeclaredAlerts()`, called at the end of both `load()` and
+> `loadModule()`. Once `guest` is live, `declare_alert` reads immediately.
+> `_recordAlert()` dedupes and preserves declaration order; an unreadable name
+> is skipped rather than fatal. Both loaders reset `declaredAlerts` /
+> `_pendingAlerts` first, so reloading a host is clean.
+>
+> **Declaring emits no event and charges no budget** — it only populates
+> `host.declaredAlerts`. `alert()` fires with or without a declaration.
 
 Parity rules mirrored from the native host: NaN is `na` (`plot(NaN)` dropped,
 NaN-anchored primitives dropped, NaN order legs omitted); events use camelCase.
@@ -274,10 +301,16 @@ interface CompileResult {
 function compileStrategy(args: CompileArgs): Promise<CompileResult>
 ```
 
-POSTs `{source, modules?}` as JSON plus `args.headers`. Reads
-`{wasmBase64?, lineTable?, inputs?, warmupBars?, errors?}`. Failure when
-`!resp.ok || errors?.length || !wasmBase64`. Base64 decoded via `atob`, falling
-back to `Buffer`. Network throw → `{success:false, errors:['compile request failed: …']}`;
+POSTs `{source, modules?}` as JSON plus `args.headers` (**no `name`** — the
+server defaults it to `"strategy"`). Reads
+`{wasmBase64?, lineTable?, inputs?, warmupBars?, errors?}` — **`alerts` and
+`contentHash` from the server response are dropped on the floor**, and
+`CompileResult` has no field for them. To get declared alert names client-side,
+either POST the compile endpoint yourself and read `alerts`, or read
+`host.declaredAlerts` after `StrategyHost.load()`.
+
+Failure when `!resp.ok || errors?.length || !wasmBase64`. Base64 decoded via
+`atob`, falling back to `Buffer`. Network throw → `{success:false, errors:['compile request failed: …']}`;
 non-JSON → `['compiler returned non-JSON (status N)']`.
 
 ## `WasmScriptProvider`
@@ -449,6 +482,11 @@ per-bar drive (`host.advance(acc, acc.length)`, then tail-scan backwards for
 `runAll()`, and asserts **cross-language parity** — the same candles produce
 event-for-event identical output to the native Rust host. It also demonstrates
 that the guest's `declare_warmup(20)` overrides `meta.warmupBars: 1`.
+
+`tests/declareAlert.test.ts` (added 0.1.8) pins the `declare_alert` contract:
+present in the import table, stashed-then-resolved across the start section,
+deduped in declaration order, read immediately once `guest` is live, and never
+fatal on an unreadable name.
 
 `tests/wasmScriptProvider.test.ts` shows a mock `Datafeed` + injected
 `taWasmBytes` + a `fetchImpl` stubbing only the compile POST, and asserts
@@ -628,7 +666,7 @@ All under `/api/v1/ta`, same auth, all need `?exchange=`.
 | GET | `/strategy/user/deployments?exchange=&user_id=` | query | `Deployment[]` |
 | PUT | `/strategy/user/deployment/{id}/status` | `{user_id, status:"active"\|"paused"\|"disabled"}` | 204 / 404 |
 | DELETE | `/strategy/user/deployment/{id}` | `{user_id}` — **DELETE with a JSON body** | 204 / 404 |
-| POST | `/strategy/backtest` | camelCase `{strategyId?\|wasm?, sourceMap?, warmupBars?, params, symbol, resolution, from, to, config}` — `wasm` is base64, pass `wasmBase64` straight through | `BacktestResult` |
+| POST | `/strategy/backtest` | camelCase `{strategyId?\|wasm?, sourceMap?, warmupBars?, params, symbol, resolution, from, to, config}` — `wasm` is base64, pass `wasmBase64` straight through; **`from`/`to` are `DateTime<Utc>` → RFC-3339** (`2026-08-01T00:00:00Z`) | `BacktestResult` |
 | POST | `/strategy/backtest/multi` | same but `symbols: []`, compiles once, fans out 8-wide | per-symbol summaries |
 | GET | `/strategies` | — | `{strategies: [...]}` built-in registry |
 | GET | `/candles` | — | `[{time,open,high,low,close,volume}]`, `time` = unix **seconds** |
@@ -642,6 +680,23 @@ consecutive_traps, last_error, last_bar_time, created_at, updated_at}` — `id` 
 an **i64**, not a UUID. Deployments auto-flip to `error` after
 `STRATEGY_TRAP_DISABLE_THRESHOLD` (default 5) consecutive traps; strikes reset
 only on explicit re-deploy.
+
+**Backtest request shape** (`web/ta/mod.rs:~690-720`, `#[serde(rename_all = "camelCase")]`):
+exactly one of `strategyId` / `wasm` (both or neither → 422
+`Invalid params: provide exactly one of \`strategyId\` or \`wasm\`, not both` /
+`… one of \`strategyId\` or \`wasm\` is required`). `warmupBars` only applies to
+inline `wasm`, default **50** (`INLINE_WARMUP_FALLBACK`). `config` is
+`{initialCapital, commissionPct, pyramiding, defaultQty, maxLeverage?}` —
+`maxLeverage` defaults to `10.0`; the rest are **required**.
+
+> 🚨 **A malformed `from`/`to` (or any bad JSON body) returns 500, not 422/400.**
+> `web.rs:234` wires `JsonConfig::default().error_handler(|err, _| CoinrayError::from(anyhow!(err)))`;
+> the anyhow downcast fails, so it becomes `CoinrayError::UnexpectedError` →
+> **500** `{"error":{"code":"-1","message":"Json deserialize error: …"}}`.
+> Same for `QueryConfig` and `PathConfig`. **This applies to every JSON-body
+> endpoint in the service, not just backtest** — so a 500 here is often a client
+> serialization bug, not infra. Send RFC-3339 (`toISOString()`), not epoch
+> seconds or `YYYY-MM-DD`.
 
 > ⚠ There is an unrelated legacy `POST /api/v1/ta/compile` (`web/ta/mod.rs:578`)
 > returning `{"metadata":{}}` — **not** the strategy compiler, and not proxied.
@@ -704,9 +759,11 @@ the module, not a static parse** → 100-bar synthetic smoke replay on a sine-wa
 
 # Gotchas for the desktop app
 
-1. **`declare_alert` is missing from the browser `StrategyHost`** — a script
-   calling `declareAlert()` fails to instantiate client-side with a `LinkError`.
-   Shim it or avoid it.
+1. **`declare_alert` needs superchart-script ≥ 0.1.8.** Below that a script
+   calling `declareAlert()` fails to instantiate client-side with a `LinkError`;
+   shim it (`declare_alert: () => {}`) or upgrade. On 0.1.8+ read the names from
+   `host.declaredAlerts` — `compileStrategy`/`CompileResult` throw the server's
+   `alerts` array away.
 2. **`subscriptionAdapter` / `candleSource` are not exported** — internals.
    Reimplement, or file an upstream export request.
 3. **`StrategyInput.type` doesn't exist on the wire** — read `kind`, fall back
@@ -728,5 +785,9 @@ the module, not a static parse** → 100-bar synthetic smoke replay on a sine-wa
 13. `min`/`max` arrive as explicit `null` (not omitted) for bool/options inputs;
     `int` always carries `±i32` bounds.
 14. Browser `log` events exist; server `log` emits nothing.
-15. Package version 0.1.7 predates two master commits (Options params, helper
-    `modules`).
+15. **superchart-script publishing is manual** — the tag-triggered workflow is
+    disabled (`workflow_dispatch` only) because the `link:` devDep on
+    `@coinrayio/superchart` breaks CI. Bumping the version in `package.json` does
+    not publish anything.
+16. **Malformed JSON bodies → 500, not 4xx** (see the backtest note). Dates must
+    be RFC-3339.

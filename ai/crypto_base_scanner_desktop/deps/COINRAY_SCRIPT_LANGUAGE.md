@@ -1,8 +1,11 @@
 # `@coinray/strategy` — script language reference
 
 > Source: `$COINRAY_REST_DIR` (branch: master)
-> Git hash: `bca89035eae3e13543e877e57297c54b7c079883`
-> Hashes verified current: 2026-08-18.
+> Git hash: `87ba31b633e951212f784285680ca8654b6d716d` (2026-08-26)
+> Hashes verified current: 2026-08-28. The SDK
+> (`packages/strategy_compiler/sdk/index.ts`), `ta_core` math, fixtures and
+> `DEFAULT_STRATEGY` are **unchanged** since the previous check — only the
+> browser host's `declare_alert` support changed.
 > Do NOT explore source — use this doc instead.
 
 What a user writes in the Scripts IDE. Single source of truth:
@@ -330,9 +333,14 @@ namespace log {
 - **Gate all persistent-state mutation and all alerts on `isNewBar()`** — the
   single most important idiom, because `onBar` re-runs on every intra-bar tick.
 - `declareAlert` makes a name discoverable to subscribers; `alert()` fires
-  regardless, but undeclared names don't appear in the picker.
-  **⚠ `declareAlert` is not supported by the browser host** — see the
-  `env.declare_alert` gap in `COINRAY_REST_API.md`.
+  regardless, but undeclared names don't appear in the picker. Server-side the
+  names come back as `alerts` on the compile response (collected after the
+  100-bar validation replay). **`declareAlert` works in the browser host only
+  from `@coinrayio/superchart-script` 0.1.8** (`4e4a5175`, 2026-08-26); on 0.1.7
+  and below any script that calls it dies at instantiation with
+  `LinkError: … "env" "declare_alert"`, taking its plots with it. Client-side
+  the names land on `StrategyHost.declaredAlerts` — `compileStrategy` drops the
+  server's `alerts` field. See `COINRAY_REST_API.md` → `StrategyHost`.
 - `log.*` goes to the IDE console only, never to the chart or alerts, and is
   **not** charged against the event budget.
 

@@ -1,9 +1,9 @@
 # Superchart Usage Patterns
 
 > Source: `$SUPERCHART_DIR` (example app + source, branch: main)
-> Superchart git hash: `4bd96aaf2c69b7badbca0e9f93bc4d571e1080c6`
-> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `52332cebd7f8e1f06983a00544258057020cce98`
-> Hashes verified current: 2026-08-18.
+> Superchart git hash: `d5298aa47cd5fecadda46cd00fc616959f17e0eb` (2026-08-26)
+> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `3bedde9153d25f86294b66e0d03c7ea5d394910d`
+> Hashes verified current: 2026-08-28.
 > Do NOT explore source — use this doc instead.
 
 ## Package rename (SC `474f052`)
@@ -79,7 +79,7 @@ etc.) — no need to touch the component. If the app ever wants to fully
 suppress the watermark, set `brand: false` on the constructor (works
 today via the enterprise symlink).
 
-## Design-system migration (SC `44be3f64` → `4bd96aaf`, PRs #107–#115)
+## Design-system migration (SC `44be3f64` → `3b6bfa2`, PRs #107–#140 — COMPLETE)
 
 The bulk of this range is an internal rebuild of SC's chrome on a Tailwind-based
 design system. Almost nothing about the public API changed — but **one new host
@@ -212,16 +212,26 @@ time with no CSS-var access, and its 10-level fibonacci ratio set doesn't map
 onto the DS's 8 fibonacci tokens. The only lever is the pre-existing
 `styleOverrides` / `setStyles` API, and only where the engine exposes the field.
 
-### TopBar swap has NOT landed
+### TopBar swap HAS landed (`e32bad9`, merged in `3b6bfa2`)
 
-The DS `TopBar` exists but the `period-bar` → `TopBar` mount swap (R4.1d) is
-still reverted/pending as of `4bd96aaf`. The legacy `period-bar` is what mounts,
-so the Period Bar API (`chart.createButton` / `createDropdown`,
-`onToolbarReady`) documented below is unaffected. Two notes for when it does
-land: labels became host-overridable via `labels?: Partial<TopBarLabels>`
-(`b9bf059`, after the localisation blocker `c5e01eb`), and there is an
-unresolved question about consumer buttons injected via `onToolbarReady`
-rendering unstyled inside the DS bar's `.ds-root` reset scope.
+`SuperchartComponent` now mounts `DsTopBar`; `widget/period-bar/**` is deleted.
+Still gated by the same `period_bar` feature flag and `periodBarVisible` option.
+
+What survives unchanged: `chart.createButton` / `createDropdown` /
+`onToolbarReady` — `DsTopBar` reports the same two host-item containers, in the
+same order, as raw `HTMLElement`s, deliberately keeping that contract DOM-based.
+
+What broke for hosts:
+- **`data-button` attributes are gone** — per-button CSS hiding no longer works
+  (see `SUPERCHART_API.md` → "Top-bar button IDs — GONE").
+- **Four feature flags are now inert**: `symbol_search`, `period_picker`,
+  `indicator_picker`, `settings_button`. `period-bar` was their only consumer.
+- Toolbar dropdowns opened via `createDropdown` portal to `document.body`, so SC
+  now stamps `dropdownEl.dataset.theme` at open time; nothing for a host to do,
+  but be aware the list is outside the `.superchart` scope.
+
+`TopBarLabels` is a design-system concern — `DsTopBarProps` has no `labels`
+prop; SC fills the strings from its own i18n keyed by `locale`.
 
 ## Dependencies
 
@@ -623,10 +633,11 @@ const sc = new Superchart({ ..., periodBarVisible: false })
 // Or toggle at runtime
 sc.setPeriodBarVisible(false)
 
-// Hide individual built-in buttons via CSS targeting the data-button attribute:
-//   [data-button="screenshot"]  { display: none; }
-//   [data-button="fullscreen"]  { display: none; }
-// Full list in SUPERCHART_API.md → "Period Bar Button IDs".
+// Hiding individual built-in buttons via CSS no longer works — the DS TopBar
+// emits no `data-button` attributes (see SUPERCHART_API.md → "Top-bar button
+// IDs — GONE"). Only three per-button flags are still honoured:
+//   disabledFeatures: ['screenshot_button', 'fullscreen_button']
+//   (timezone_button already defaults to false)
 ```
 
 ## Overlay Default Style Templates
@@ -785,53 +796,69 @@ getFirstCandleTime(symbolName, resolution, callback) {
 
 ## Scripting (`scriptProvider`) — lifecycle and gaps
 
-> **⛔ Read the BLOCKER box in `SUPERCHART_API.md` → "ScriptProvider" first.**
-> `@coinrayio/superchart-script@0.1.7` was built against an unmerged SC branch
-> (`feat/wasm-script-provider-example`) and does not compile or run against
-> `main`. Everything below describes `main`'s actual, weaker contract.
+Types are in `SUPERCHART_API.md` → "ScriptProvider" / "ScriptEditorComponentProps"
+/ "ScriptPrimitive". This section is what SC actually *does* with the provider,
+verified at `d5298aa` in `src/lib/components/SuperchartComponent.tsx`.
 
-Types are in `SUPERCHART_API.md` → "ScriptProvider". This section is what SC
-actually *does* with the provider, verified at `4bd96aaf` in
-`src/lib/components/SuperchartComponent.tsx`. Several documented-looking
-capabilities are not wired — read this before designing against the interface.
+> **The `main` blocker is gone.** `d5298aa` (2026-08-26) merged the re-port of
+> `feat/wasm-script-provider-example` onto current `main`. `PrimitiveSnapshot`,
+> `onPrimitives`, and `ScriptProvider.language` / `defaultScript` /
+> `EditorComponent` all exist on `main`, so `@coinrayio/superchart-script`'s
+> `WasmScriptProvider` typechecks and runs against the linked SC. **SC ships no
+> editor UI at all any more** — `widget/script-editor/**` and its nine
+> CodeMirror deps were deleted (`b103f4a`); the provider supplies the editor.
 
 ### Call order
 
-1. `new Superchart({ scriptProvider })` — stored in the chart store
-   (`chartStore.ts:500`). **Presence alone makes the `fx` toolbar button appear**
-   (`SuperchartComponent.tsx:979`). No feature flag gates it.
-2. User clicks `fx`, or the host calls `chart.openScriptEditor()` → SC's built-in
-   `<ScriptEditor>` panel mounts.
-3. User clicks **Add to Chart** → SC calls
-   `scriptProvider.executeAsIndicator({code, language: 'pine', symbol, period})`.
+1. `new Superchart({ scriptProvider })` — stored in the chart store.
+   **Presence alone makes the `Script` toolbar button appear**
+   (`SuperchartComponent.tsx:1019` — `onScriptClick={scriptProvider ? … : undefined}`).
+   No feature flag gates it.
+2. User clicks it, or the host calls `chart.openScriptEditor()` → SC renders
+   `scriptProvider.EditorComponent`. **Without an `EditorComponent`, nothing
+   renders** — the button still shows and toggles internal state only.
+   SC passes `theme`, `debug`, `locale`, `language`, `initialCode`
+   (`pendingCloneCode || provider.defaultScript`), `onClose`, `onAddToChart`,
+   `onCloneAndEdit`. Nothing else — see the props note in `SUPERCHART_API.md`.
+3. The editor calls `onAddToChart(code)` → SC calls
+   `scriptProvider.executeAsIndicator({ code, language: provider.language?.name ?? 'pine', symbol, period })`.
 4. SC builds klinecharts `figures[]` + `calc`/`draw` from
-   `subscription.metadata.plots`, calls `registerIndicator({name: 'SCRIPT_<indicatorId>', …})`
-   and `chart.createIndicator(...)`.
+   `subscription.metadata.plots`, calls `registerIndicator({ name: 'SCRIPT_<indicatorId>', … })`
+   and `chart.createIndicator(...)`. Line plots carrying a `pane` other than
+   `candle_pane` are grouped by pane name and registered as extra templates
+   `SCRIPT_<id>_<pane>` on their own panes, fed from the same data store
+   (`5aab82e`). If *every* plot is routed away, the main template is skipped.
 5. SC wires `onData` / `onTick` / `onHistory?` / `onError?` into a local
-   `Map<timestamp, IndicatorDataPoint>` that `calc` reads. Every handler ends with
-   `chart.overrideIndicator({name})` to force a repaint.
-6. `stop(scriptId)` fires **only** when the user clicks the ✕ on the indicator in
-   the pane legend, gated on `name.startsWith('SCRIPT_')`
-   (`SuperchartComponent.tsx:641-649`).
-7. `chart.dispose()` calls `scriptProvider.dispose?()` **once**
-   (`Superchart.ts:1148-1151`) — it does *not* iterate and `stop()` each running
-   script.
+   `Map<timestamp, IndicatorDataPoint>` that `calc` reads; each handler ends by
+   calling `chart.overrideIndicator({ name })` for **every** registered template.
+6. SC wires `onPrimitives?` into `reconcilePrimitives()` — full-snapshot diff to
+   locked, `save: false` overlays on `candle_pane`.
+7. `stop(scriptId)` fires **only** when the user clicks the ✕ on one of the
+   script's indicators in a pane legend (gated on `name.startsWith('SCRIPT_')`).
+   Closing any one template stops the script, removes its sibling templates, and
+   tears down its primitives.
+8. `chart.dispose()` calls `scriptProvider.dispose?()` **once** — it does *not*
+   iterate and `stop()` each running script.
 
 ### What SC does NOT do — the host must
 
 | Gap | Consequence |
 |---|---|
-| **`compile()` is never called by SC.** The built-in `<ScriptEditor>` doesn't import the provider at all; it's exercised only by the storybook mock. | No compile-on-keystroke diagnostics out of the box. The host drives compilation itself. |
-| **Nothing happens on symbol/period change.** `ScriptProvider` has no `onSymbolPeriodChange` (unlike `IndicatorProvider`, `indicator.ts:70`). | SC keeps painting stale script output against the new candle set. The host must listen to `chart.onSymbolChange` / `onPeriodChange` and stop + re-execute. |
+| **`compile()` is never called by SC.** Now that the editor belongs to the provider, the provider's own `EditorComponent` is the only thing that can drive compilation. | Diagnostics are the provider's job end-to-end; `ScriptEditorComponentProps.diagnostics` is declared but SC never passes it. |
+| **Nothing happens on symbol/period change.** `ScriptProvider` still has no `onSymbolPeriodChange` (unlike `IndicatorProvider`). | SC keeps painting stale script output against the new candle set. The host must listen to `chart.onSymbolChange` / `onPeriodChange` and stop + re-execute. |
 | **`stop()` is not called on symbol/period change, nor per-script on dispose.** | The host's provider must track every running `scriptId` and clean them up in `dispose()`. |
 | **`settings` is never passed to `executeAsIndicator`** — always `undefined`. | Script inputs cannot be seeded from SC. |
-| **`ScriptProvider` has no `updateSettings`** (unlike `IndicatorProvider`), and `IndicatorSettingModal` is never given `backendSettings` for script indicators. | No in-place settings edit. Changing a script input = `stop(oldId)` + `executeAsIndicator(newParams)` + manually remove/re-add the klinecharts indicator. **This is the TV-parity gap for `param.int` / `param.float`.** |
-| **`listScripts` / `saveScript` / `deleteScript` are unconsumed.** The panel's Save button only `console.log`s. | Implementing them buys nothing unless the host builds its own UI. |
-| **No way to suppress SC's built-in editor** while still using `scriptProvider` for execution. The `fx` button auto-appears whenever `scriptProvider` is truthy; there is no `SuperchartOptions` flag. | Relevant to Altrady: the decision is to keep Altrady's own IDE and *not* expose SC's editor. There is currently no supported way to hide it. |
-| **No free-form drawing primitives.** `main` has no `PrimitiveSnapshot` / `onPrimitives` — the unmerged branch added them. | Script `draw.*` output has no rendering path. Everything must be expressed as `IndicatorMetadata.plots`, which cannot represent arbitrary lines/boxes/labels. |
-| **No way to pass a custom `ScriptLanguageDefinition`.** The type is exported and `<ScriptEditor>` takes a `language?` prop, but `SuperchartComponent` never passes it — it always falls back to the bundled Pine v4/v5/v6 definition (`script-editor/defaultLanguage.ts`). | A `@coinray/strategy` language definition cannot reach SC's editor. |
+| **`ScriptProvider` has no `updateSettings`.** The settings modal now *does* get `settingDefs`/`settingValues` — but only from `getActiveIndicatorByKlinechartsName`, whose registry (`useBackendIndicators.activeRef`) is populated by the `IndicatorProvider` path only. A `SCRIPT_*` name resolves to `undefined`. | No in-place settings edit for scripts. Changing a script input = `stop(oldId)` + `executeAsIndicator(newParams)` + manually remove/re-add the indicator. **Still the TV-parity gap for `param.int` / `param.float`.** |
+| **`listScripts` / `saveScript` / `deleteScript` are unconsumed.** SC no longer has a Save button at all. | Implementing them buys nothing unless the provider's own editor calls them. |
+| **No way to suppress the `Script` toolbar button** while still using `scriptProvider` for execution. It appears whenever `scriptProvider` is truthy; there is no `SuperchartOptions` flag, and omitting `EditorComponent` leaves a button that does nothing visible. | Relevant to Altrady: the decision is to keep Altrady's own IDE. The supported shape is now "supply your IDE as `EditorComponent`" rather than "hide SC's". Hiding the button outright is still unsupported. |
 
-All eight are **SC API requests**, not things to patch in the SC repo.
+RESOLVED since `4bd96aaf` (were gaps, no longer are):
+- **Script-drawn primitives** — `onPrimitives` + `ScriptPrimitive` render
+  markers/lines/boxes/labels. `draw.*` output no longer has to be squeezed
+  through `IndicatorMetadata.plots`.
+- **Custom `ScriptLanguageDefinition`** — set `provider.language`; SC forwards
+  it to the editor and uses `language.name` for `executeAsIndicator`.
+- **Multi-pane plots** — `PlotLine.pane` routes to dedicated sub-panes.
 
 ### `openScriptEditor` / `closeScriptEditor`
 
@@ -840,33 +867,34 @@ chart.openScriptEditor({ initialCode, readOnly })   // readOnly → view + "Clon
 chart.closeScriptEditor()
 ```
 
-Functional only when `scriptProvider` was passed to the constructor.
+Signatures unchanged. Functional only when `scriptProvider` **and** its
+`EditorComponent` were supplied; otherwise both are visual no-ops — including
+the read-only preset-code path (indicator tooltip `{}` icon →
+`IndicatorProvider.getIndicatorCode`).
 
-### CodeMirror is a real optional peer dep (SC `2682f8f`)
+### CodeMirror is no longer an SC dependency (`b103f4a`)
 
-`createLanguageExtension(...)` became **async**: CodeMirror imports
-(`@codemirror/language`, `/autocomplete`, `/view`, `/lint`, `@lezer/highlight`)
-are now dynamic and memoised, so a consumer's bundler doesn't have to resolve
-them unless the editor actually opens.
-
-> **Gotcha:** if those packages aren't in `node_modules`, the dynamic import
-> throws, is caught (`script-editor/index.tsx:275/297`), and the editor silently
-> degrades to a plain `<textarea>` — no highlighting, no autocomplete, no lint,
-> and no obvious error. Looks broken without explaining why.
+The nine `@codemirror/*` + `@lezer/highlight` optional peer deps, their rollup
+externals, and the async `createLanguageExtension()` shim were all deleted with
+the built-in editor. **The silent-degrade-to-`<textarea>` gotcha is gone.**
+Whatever CodeMirror the editor needs is now the provider package's own
+dependency — `@coinrayio/superchart-script` bundles it.
 
 ### Colours
 
 `IndicatorMetadata.plots[].color` comes from the script / backend response, not
-from `chartColors`. Unlike overlays, there is no theme-derived colour
-convention to follow here.
+from `chartColors`. Same for `ScriptPrimitive` colours — CSS strings produced by
+the script. Unlike overlays, there is no theme-derived colour convention here,
+and primitives are **not** re-coloured on theme change.
 
 ## New always-on widgets (design-system range)
 
 Three widgets now mount unconditionally — **no feature flag, no host opt-in**:
 
 - **`TimezoneLauncher`** — bottom-right pill inside `BottomBar`
-  (`SuperchartComponent.tsx:1138-1150`). It *replaces* the period-bar timezone
-  button, which is why `timezone_button` now defaults to `false`. SC updates
+  inside `BottomBar`. It *replaces* the old period-bar timezone button, which is
+  why `timezone_button` defaults to `false` (and `DsTopBar` only renders a
+  timezone control when a host wires `onTimezoneClick`, which SC does not). SC updates
   `store.setTimezone` / `setFollowExchangeTimezone` internally before its
   `onSelect` fires.
 - **`BottomBar`** — a trivial layout shell; currently hosts only the launcher.
@@ -883,12 +911,21 @@ is on **and** the host's `StorageAdapter` implements both `listStudyTemplates`
 and `loadStudyTemplate`. Those are pre-existing optional methods; they're just
 newly called with `indicatorName` omitted (fetch-all).
 
-> **`DsTopBar` is dead code.** `widget/top-bar/` was built in this range but is
-> imported nowhere — `SuperchartComponent` still mounts the legacy `PeriodBar`,
-> so the Period Bar API below (`createButton` / `createDropdown` /
-> `onToolbarReady`) is unaffected. Its doc comment mentions a `ds_top_bar`
-> feature flag; no such flag exists. Treat `top-bar/` as a preview of a future
-> migration, not as API.
+**`ObjectTreePanel`** (new in `d3b6684`) — a right-docked, full-height panel
+listing the chart's live overlays and indicators. Opened from the **"Object
+tree" row of SC's built-in overlay right-click menu** and closed from its own
+header — never by the host: it is internal store state
+(`chartStore.showObjectTree`), with no `SuperchartOptions` flag, no feature flag
+and no public method. A host that supplies `onUserOverlayRightClick` suppresses
+SC's built-in menu, so in Altrady the panel is unreachable. It is a sibling
+of the chart column, so the chart *shrinks* when it opens rather than being
+overlaid — a host measuring chart width must not assume the panel's absence.
+Every chart-state mutation now also bumps `chartStore.stateRevision`, which is
+what the panel subscribes to.
+
+> **`DsTopBar` is no longer dead code** — it is what mounts (see "TopBar swap
+> HAS landed" above). Its own doc comment still claims a `ds_top_bar` feature
+> flag; **no such flag exists** and the mount is gated by `period_bar`.
 
 ### Settings modal rewrite — what it means for a host
 
@@ -918,12 +955,15 @@ new Superchart({
 })
 ```
 
-New flags in 69a41cf (`9adf04f`):
-
-- `settings_button` (default `true`) — hides the gear/settings button in the period bar
-- `timezone_button` (default `true`) — hides the timezone selector button in the period bar
-
-Both default ON; disable to reclaim toolbar space when the host app exposes its own settings/timezone UI.
+> **Four flags are now inert (`d5298aa`).** `symbol_search`, `period_picker`,
+> `indicator_picker` and `settings_button` had exactly one consumer — the
+> deleted `period-bar`. `DsTopBar` reads only `screenshot_button`,
+> `fullscreen_button` and `timezone_button`; the market label, timeframe picker,
+> indicators button and gear render unconditionally. Passing the dead flags
+> still typechecks and still does nothing.
+>
+> `timezone_button` defaults to **`false`** (since `9a8dc80`), not `true` — the
+> bottom-right `TimezoneLauncher` replaced it.
 
 `disabledFeatures` wins when a flag appears in both lists. Toggle at runtime:
 

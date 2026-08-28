@@ -1,9 +1,9 @@
 # Superchart API Reference
 
 > Source: `$SUPERCHART_DIR` (branch: main)
-> Superchart git hash: `4bd96aaf2c69b7badbca0e9f93bc4d571e1080c6`
-> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `52332cebd7f8e1f06983a00544258057020cce98`
-> Hashes verified current: 2026-08-18.
+> Superchart git hash: `d5298aa47cd5fecadda46cd00fc616959f17e0eb` (2026-08-26)
+> coinray-chart (`packages/coinray-chart`, branch: main) git hash: `3bedde9153d25f86294b66e0d03c7ea5d394910d`
+> Hashes verified current: 2026-08-28.
 > Do NOT explore source — use this doc instead.
 
 ## Package name & version
@@ -181,7 +181,20 @@ BrandOption             — BrandConfig | false   // false hides watermark entir
 
 // Overlay context-menu helpers (new in 8ea9d2c / 6d68fbb)
 ExtractedDrawingTemplate — { toolName: string; template: DrawingTemplate } — returned by sc.getDrawingTemplate(id)
+
+// Script primitive types (new in d5298aa) — types only, no runtime values
+ScriptPrimitive, MarkerShape, PrimitivePoint, PrimitiveSnapshot
+ScriptEditorComponentProps — props contract for ScriptProvider.EditorComponent
 ```
+
+> **NOT re-exported: `getIndicatorTemplate`.** coinray-chart `d0491f1f` added
+> `getIndicatorTemplate(name): IndicatorTemplate | null` alongside
+> `getSupportedIndicators()` (read a registered indicator's `shortName` /
+> `series` / `precision` / `calcParams` without instantiating it). SC's barrel
+> (`src/lib/index.ts:44`) still re-exports only `registerOverlay`,
+> `registerFigure`, `registerIndicator` and `DEFAULT_OVERLAY_PROPERTIES`, so
+> `import { getIndicatorTemplate } from "superchart"` FAILS. Same class of SC
+> API gap as `FIBONACCI_CHANNEL_LEVELS` above.
 
 `Superchart.version()` is also exposed as a TradingView-style static
 method on the class — handy from the browser console
@@ -235,7 +248,7 @@ Also re-exports Superchart-specific types: `SuperchartOptions`, `SuperchartApi`,
 `Bar`, `PeriodParams`, `HistoryMetadata`, `OrderLine`, `OrderLineProperties`,
 `PriceLine`, `PriceLineProperties`, `PriceLineEventListener`,
 `TradeLine`, `TradeLineProperties`,
-`ScriptProvider`, `PaneProperties`, `SuperchartDataLoader`, `LibrarySymbolInfo`,
+`ScriptProvider`, `ScriptEditorComponentProps`, `PaneProperties`, `SuperchartDataLoader`, `LibrarySymbolInfo`,
 `FeatureFlag`,
 `LocalStorageAdapterOptions`, `HttpStorageAdapterOptions`,
 `ToolbarButtonOptions`, `ToolbarDropdownOptions`, `ToolbarDropdownItem`,
@@ -288,7 +301,7 @@ Indicator type re-exports (new in `f51001b2` — types existed in `src/lib/types
   scriptProvider?: ScriptProvider
   drawingBarVisible?: boolean           // default: false
   showVolume?: boolean                  // default: true
-  periodBarVisible?: boolean            // default: true — hide to reclaim toolbar space; per-button CSS via [data-button="<id>"]
+  periodBarVisible?: boolean            // default: true — hide to reclaim toolbar space
   periods?: Period[]
   debug?: boolean                       // default: true — set false to silence non-essential logs
 
@@ -590,22 +603,20 @@ interface SearchSymbolResult {
 { type: 'separator' }                                                  // visual separator
 ```
 
-### Period Bar Button IDs
+### Top-bar button IDs — GONE (`d5298aa`)
 
-Each built-in period-bar element has a `data-button` attribute for targeted CSS
-hiding/disabling without removing the whole bar. Custom buttons added via
-`createButton` do NOT get `data-button` — style those via the returned `HTMLElement`.
+**The `data-button` hooks no longer exist.** The legacy `period-bar` was deleted
+when `DsTopBar` took over the mount (`e32bad9`, in the `3b6bfa2` design-system
+merge); the design-system `TopBar` identifies its buttons by translated
+`aria-label` only. The single surviving attribute anywhere in `src/` is
+`data-button="indicator-templates"` (`indicator-templates-modal/ToolbarButton.tsx`).
 
-| `data-button` value  | Element                        |
-|----------------------|--------------------------------|
-| `leftToolbarToggle`  | Left toolbar expand/collapse   |
-| `symbolSearch`       | Symbol name / search trigger   |
-| `periodPicker`       | Period (timeframe) picker      |
-| `indicators`         | Indicators modal button        |
-| `timezone`           | Timezone selector              |
-| `settings`           | Chart settings button          |
-| `screenshot`         | Screenshot button              |
-| `fullscreen`         | Fullscreen toggle              |
+Consequence for a host: CSS hiding of individual built-in buttons is no longer
+supported. Use the feature flags instead (`screenshot_button`,
+`fullscreen_button`, `timezone_button` — the only three the new bar still
+honours; see "FeatureFlag"). Custom buttons added via `createButton` are
+unaffected — `onToolbarReady` / `createButton` / `createDropdown` are carried
+over verbatim by `DsTopBar` and still hand back raw `HTMLElement`s.
 
 ### TimeframeVisibility
 ```typescript
@@ -1037,41 +1048,20 @@ is informational, not a required migration.
 ### ScriptProvider
 
 Passed as `new Superchart({ scriptProvider })`. Verified against
-`src/lib/types/script.ts` at `4bd96aaf` (matches `$SUPERCHART_DIR/docs/scripts.md`).
+`src/lib/types/script.ts` and `src/lib/types/primitive.ts` at `d5298aa`
+(matches `$SUPERCHART_DIR/docs/scripts.md`, which is current).
 
-> **⛔ BLOCKER — `main` cannot run `@coinrayio/superchart-script` today**
->
-> The npm package `@coinrayio/superchart-script@0.1.7` (the one the app installs)
-> was compiled against a **different, unmerged** Superchart. Its
-> `WasmScriptProvider` declares `language`, `defaultScript` and `EditorComponent`
-> on `ScriptProvider`, and its `reducePrimitives()` returns `PrimitiveSnapshot`.
->
-> **None of that exists on `main`.** Those types were introduced by commit
-> `12b80231c53ce69c14fd5231113f41c4b80349de` ("feat: pluggable scripting —
-> primitive overlays + editor slot", 2026-06-16), which lives only on
-> `origin/feat/wasm-script-provider-example`. That branch also adds
-> `src/lib/types/primitive.ts` (`ScriptPrimitive`, `MarkerShape`,
-> `PrimitivePoint`, `PrimitiveSnapshot`), `IndicatorSubscription.onPrimitives?()`,
-> and a `ScriptEditorComponentProps` contract — and deletes the in-tree
-> `script-editor` widget.
->
-> Divergence, not simple staleness: merge-base with `main` is `dcb4c417`
-> (2026-06-12); `main` has since gained **203 commits** the branch never
-> absorbed, and the branch's 2 commits have no equivalent on `main`
-> (`git cherry main origin/feat/wasm-script-provider-example` marks both `+`).
-> The locally built `dist-enterprise/` matches `main`, not the branch.
->
-> **Consequences:** `WasmScriptProvider` fails to typecheck against the linked
-> SC (`PrimitiveSnapshot` and the three `ScriptProvider` members don't exist),
-> and at runtime `main`'s `SuperchartComponent` has no `onPrimitives` wiring and
-> no editor slot. Script-drawn primitives (`draw.*`) have **no rendering path on
-> `main` at all** — everything must go through `IndicatorMetadata.plots`.
->
-> **Unblocking is the SC author's call, not ours:** either rebase and merge
-> `feat/wasm-script-provider-example` onto current `main`, or re-port the feature.
-> Re-verify this section before designing the SC scripting port.
-
-The contract below is `main`'s — i.e. what is actually available today.
+> **The old `main`-can't-run-`superchart-script` blocker is RESOLVED.** The
+> feature was re-ported onto current `main` and merged as `d5298aa`
+> (2026-08-26), in three commits: `9f760af` (primitive types + four locked
+> overlay templates + `reconcilePrimitives` + `onPrimitives` wiring + the
+> `language` / `defaultScript` / `EditorComponent` slot), `b103f4a` (deletes the
+> in-tree `widget/script-editor/**` and its nine CodeMirror deps), and `5aab82e`
+> (`PlotLine.pane` → dedicated sub-panes). Cross-checked against the installed
+> `@coinrayio/superchart-script@0.1.8`: its `WasmScriptProvider` declares
+> `language` / `defaultScript` / `EditorComponent` and its `subscriptionAdapter`
+> imports `PrimitiveSnapshot` from `@coinrayio/superchart` — all four now exist
+> on `main`, so it resolves against the linked SC.
 
 ```typescript
 interface ScriptProvider {
@@ -1082,6 +1072,14 @@ interface ScriptProvider {
   listScripts?(): Promise<ScriptInfo[]>
   saveScript?(script: ScriptSaveParams): Promise<ScriptInfo>
   deleteScript?(scriptId: string): Promise<void>
+
+  // --- NEW in d5298aa (9f760af) ---
+  language?: ScriptLanguageDefinition                          // forwarded to EditorComponent;
+                                                               // its `.name` becomes executeAsIndicator's
+                                                               // `language` (falls back to 'pine')
+  defaultScript?: string                                       // starter buffer when the editor opens empty
+  EditorComponent?: ComponentType<ScriptEditorComponentProps>  // the editor UI itself — SC ships none
+
   dispose?(): void
 }
 
@@ -1142,6 +1140,77 @@ interface ScriptFunctionParameter { name: string; type: string; description?: st
 interface ScriptBuiltinVariable { name: string; description?: string; type?: string }
 ```
 
+### ScriptEditorComponentProps (new in `d5298aa`)
+
+The contract between SC and the provider-supplied editor. SC owns only the
+`Script` toolbar button and the open/close lifecycle; everything the editor
+needs is passed in (theme, debug, locale) so the editor never imports the base
+runtime — that keeps `@coinrayio/superchart-script`'s dependency on
+`@coinrayio/superchart` **type-only**.
+
+```typescript
+interface ScriptEditorComponentProps {
+  locale?: string
+  language?: ScriptLanguageDefinition
+  editorExtensions?: unknown[]        // raw CodeMirror extensions; overrides `language`
+  initialCode?: string
+  scriptName?: string                 // default: "Untitled script"
+  isOnChart?: boolean                 // true → label the button "Update on Chart"
+  diagnostics?: ScriptDiagnostic[]
+  onClose?: () => void
+  onAddToChart?: (code: string) => void
+  onSave?: (code: string, name: string) => void
+  onChange?: (code: string) => void
+  onNameChange?: (name: string) => void
+  readOnly?: boolean                  // preset-code viewer mode
+  onCloneAndEdit?: (code: string) => void
+  theme: 'dark' | 'light'             // REQUIRED
+  debug?: boolean
+}
+```
+
+What SC actually passes at the two mount sites (`SuperchartComponent.tsx`):
+`theme`, `debug`, `locale`, `language`, `initialCode`, plus `onClose` /
+`onAddToChart` / `onCloneAndEdit`. `scriptName`, `isOnChart`, `diagnostics`,
+`onSave`, `onChange`, `onNameChange` and `editorExtensions` are declared but
+**never supplied** — an editor must default them.
+
+### ScriptPrimitive / PrimitiveSnapshot (new in `d5298aa`)
+
+Script-drawn chart primitives. Times are unix **milliseconds**; colours are CSS
+strings. Exported from the package barrel; part of the base overlay set, so a
+consumer can drive them without any script engine.
+
+```typescript
+type MarkerShape = 'circle' | 'square' | 'triangle' | 'arrowUp' | 'arrowDown' | 'cross'
+interface PrimitivePoint { timestamp: number; value: number }
+
+type ScriptPrimitive =
+  | { kind: 'marker'; timestamp: number; value: number; shape: MarkerShape
+      color: string; sizePx: number | null }
+  | { kind: 'line'; p1: PrimitivePoint; p2: PrimitivePoint
+      color: string; width: number; style: 'solid' | 'dashed' | 'dotted' }
+  | { kind: 'box'; p1: PrimitivePoint; p2: PrimitivePoint
+      fill: string; border: string; borderWidth: number }
+  | { kind: 'label'; timestamp: number; value: number; text: string
+      color: string; bgcolor: string | null }
+
+interface PrimitiveSnapshot { primitives: { key: string; primitive: ScriptPrimitive }[] }
+```
+
+Delivered via the optional `IndicatorSubscription.onPrimitives(handler)`. Emit
+the **full** snapshot on every change (initial run, history recompute, live
+tick); SC's `reconcilePrimitives()` diffs it against a per-script tracked map —
+create new keys, remove+recreate changed keys (there is no `overrideOverlay` on
+the wrapper), delete absent keys. Re-sending an identical snapshot is a no-op.
+`key` must be stable across identical recomputes.
+
+Each primitive becomes an overlay created with
+`{ name: 'scriptMarker'|'scriptLine'|'scriptBox'|'scriptLabel', lock: true,
+save: false, visible: true, paneId: 'candle_pane', extendData: <primitive> }` —
+i.e. **always on the candle pane**, locked, non-selectable, non-persisted. They
+are torn down when the script indicator is closed.
+
 ### IndicatorSubscription / IndicatorMetadata / IndicatorDataPoint
 
 Shared by `IndicatorProvider` and `ScriptProvider` — `executeAsIndicator()` returns this.
@@ -1154,6 +1223,8 @@ interface IndicatorSubscription {
   onTick(handler: (data: IndicatorDataPoint) => void): void        // single real-time point
   onHistory?(handler: (data: IndicatorDataPoint[]) => void): void  // backfill — MERGED, not replaced
   onError?(handler: (error: Error) => void): void
+  // NEW in d5298aa — script-drawn markers/lines/boxes/labels. FULL snapshot every time.
+  onPrimitives?(handler: (snapshot: PrimitiveSnapshot) => void): void
 }
 
 interface IndicatorMetadata {
@@ -1192,7 +1263,12 @@ type IndicatorPlot = PlotLine | PlotHistogram | PlotHLine | PlotShape | PlotChar
 
 interface PlotLine      { type: 'plot'; id: string; title: string
                           style: 'line'|'stepline'|'stepline_diamond'|'circles'|'cross'|'area'
-                          color: string; lineWidth?: number; offset?: number; transparency?: number }
+                          color: string; lineWidth?: number; offset?: number; transparency?: number
+                          pane?: string }   // NEW in d5298aa (5aab82e) — Pine `plotPane`.
+                                            // omitted or 'candle_pane' → the script's own pane;
+                                            // any other value → a dedicated sub-pane, one per
+                                            // distinct name, registered as SCRIPT_<id>_<pane>.
+                                            // Only PlotLine has it — no other plot variant.
 interface PlotHistogram { type: 'histogram'; id: string; title: string; color: string; histBase?: number }
 interface PlotHLine     { type: 'hline'; id: string; price: number; color: string
                           lineStyle?: 'solid'|'dashed'|'dotted'; lineWidth?: number; title?: string }
@@ -1268,6 +1344,16 @@ type FeatureFlag =
 > **`volume_in_legend` is deprecated.** It still works, but `resolveFeatures`
 > emits a one-time `console.warn` pointing at `preferences.statusLine.volume`
 > as the replacement.
+
+> **REGRESSION (`d5298aa`, via the `3b6bfa2` design-system merge): four flags
+> are no longer read by anything.** The deleted `period-bar` was the only
+> consumer of `symbol_search`, `period_picker`, `indicator_picker` and
+> `settings_button`; `DsTopBar` calls `useFeature` for `screenshot_button`,
+> `fullscreen_button` and `timezone_button` only, and renders the market label,
+> timeframe picker, indicators button and gear unconditionally. The flags still
+> exist and still typecheck — they just do nothing. (`crosshair_magnet` and
+> `last_close_price_line` were already unconsumed at `4bd96aaf`.) Verified by
+> grepping every `useFeature(` / `isFeatureEnabled(` call site at `d5298aa`.
 
 `disabledFeatures` wins over `enabledFeatures` when a flag appears in both.
 `drawing_bar` / `period_bar` flags control availability (binary); `drawingBarVisible` / `periodBarVisible` options control current visibility state (user-toggleable). Toolbar shows only when flag is `true` AND visibility is `true`.
@@ -1827,7 +1913,7 @@ interface RotatedTextAttrs {
 
 ## Built-in Screenshot Feature
 
-SC has a built-in screenshot button in the toolbar (PeriodBar) and a `Ctrl+P` / `Cmd+P` keyboard shortcut.
+SC has a built-in screenshot button in the toolbar (`DsTopBar` since `d5298aa`) and a `Ctrl+P` / `Cmd+P` keyboard shortcut.
 
 ### Flow
 1. Button click → `onScreenshotClick` in `SuperchartComponent.tsx:499`
@@ -1838,14 +1924,16 @@ SC has a built-in screenshot button in the toolbar (PeriodBar) and a `Ctrl+P` / 
 ### Key files
 | Component | File |
 |-----------|------|
-| Button | `src/lib/widget/period-bar/index.tsx` (line ~232) |
+| Button | `src/lib/widget/top-bar/index.tsx` → `design-system/components/TopBar/TopBar.tsx` (gated by `screenshot_button`) |
 | Click handler | `src/lib/components/SuperchartComponent.tsx` (line ~499) |
 | Modal | `src/lib/widget/screenshot-modal/index.tsx` |
 | Keyboard shortcut | `src/lib/store/keyEventStore.ts` (line ~211, `case 'p'`) |
 | Store signal | `src/lib/store/chartStore.ts` (`screenshotUrl` signal) |
 
-### Customization: none
-No constructor option, callback, or event to disable, hide, or override the screenshot button or its behavior. The button is hardcoded in the toolbar. Image format is hardcoded to JPEG in the UI (though `getScreenshotUrl` API accepts `'png' | 'jpeg'`). Background color is auto-selected from theme (`#151517` dark, `#ffffff` light).
+### Customization: only on/off
+`disabledFeatures: ['screenshot_button']` hides the button (still honoured by
+`DsTopBar`). There is no callback or event to override the *behaviour* — the
+modal is hardcoded, and `Ctrl/Cmd+P` is not gated by the flag. Image format is hardcoded to JPEG in the UI (though `getScreenshotUrl` API accepts `'png' | 'jpeg'`). Background color is auto-selected from theme (`#151517` dark, `#ffffff` light).
 
 ### Override approach
 To replace the built-in screenshot behavior with custom logic (e.g., upload + share modal), the SC library needs a new option. Possible API additions:
@@ -1913,7 +2001,7 @@ Chart templates are named full-chart snapshots persisted via `StorageAdapter.*Ch
 ## Known Limitations
 
 - **PriceLine `editable: false` not working** — `createPriceLine` does not respect `editable: false`. Lines remain draggable. Reported to SC dev.
-- **Screenshot button not customizable** — No way to override or disable the built-in screenshot button/modal. Need `onScreenshot` callback or `disableScreenshot` option for Altrady's share-modal integration.
+- **Screenshot behaviour not customizable** — the button can be hidden via `disabledFeatures: ['screenshot_button']`, but there is no way to override what it does (nor to disable the `Ctrl/Cmd+P` shortcut). Need an `onScreenshot` callback for Altrady's share-modal integration.
 
 ## Replay Engine
 
