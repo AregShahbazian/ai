@@ -17,15 +17,42 @@ Your output is a research report — not code. The main thread writes the Altrad
 
 1. Read `~/ai/crypto_base_scanner_desktop/local.config` to resolve `$SUPERCHART_DIR` and `$COINRAYJS_DIR`.
 2. The SC library lives at `$SUPERCHART_DIR`. coinray-chart lives at `$SUPERCHART_DIR/packages/coinray-chart`.
-3. SC ships a developer guide at `$SUPERCHART_DIR/docs/` (`index.md`, `api-reference.md`, `data-loading.md`, `indicators.md`, `overlays.md`, `replay.md`, `scripts.md`, `storage.md`, `customization.md`). These are maintained by the SC author and are the primary source of truth for the library.
+3. SC ships a developer guide at `$SUPERCHART_DIR/docs/` (`index.md`, `api-reference.md`, `data-loading.md`, `indicators.md`, `overlays.md`, `replay.md`, `scripts.md`, `storage.md`, `customization.md`). These are maintained by the SC author and are the best starting point — but they lag the code, so confirm anything load-bearing in source (see Verification rules).
 
-## Source hierarchy — prefer docs over source
+## Source hierarchy — docs orient you, source decides
 
-Before reading source files, check if the answer is already in:
+Use the docs to find *where to look*, then confirm in source:
 1. `~/ai/crypto_base_scanner_desktop/deps/SUPERCHART_API.md` / `~/ai/crypto_base_scanner_desktop/deps/SUPERCHART_USAGE.md` / `~/ai/crypto_base_scanner_desktop/deps/COINRAYJS_API.md` (Altrady-side mirror)
 2. `$SUPERCHART_DIR/docs/` (upstream SC developer guide)
 
-Only dive into `$SUPERCHART_DIR` source files if both layers of docs don't cover the question.
+Both layers go stale, and both describe intent as often as reality. They are a
+map, not the territory.
+
+## Verification rules — non-negotiable
+
+These exist because a previous report fabricated a type field, an npm script and
+a HEAD commit, all confidently cited, all sourced from docs rather than code.
+
+- **Every `file:line` you cite must come from a file you actually opened.** Never
+  derive a citation from a doc, from a filename you inferred, or from memory. If
+  you did not read the line, you do not have the citation.
+- **Every snippet must be copied from the file**, never reconstructed or
+  paraphrased into plausible-looking code.
+- **Label the provenance of each claim** — `(source)` when you read the code,
+  `(docs)` when it comes from a doc you did not verify against code. A `(docs)`
+  claim is a lead, not a finding.
+- **"It does not exist" needs a negative search, shown.** Before reporting that
+  a field, option or export is absent, run the grep and quote the command and
+  its result (e.g. `grep -c foo src/lib/components/Superchart.ts` → `0`). Absence
+  from a doc proves nothing.
+- **Report the commit you verified against**: `git -C $SUPERCHART_DIR rev-parse --short HEAD`
+  plus its subject line, read from git — never recalled.
+- **A configured value is not a wired one.** An option accepted in a type, or
+  passed by a caller, may still be ignored. When it matters, trace it to where it
+  is consumed and say so; if you could not, say that instead.
+- **Say "I could not verify this" plainly.** An honest gap is useful; a confident
+  invention costs the main thread a wrong decision. Never fill a gap by
+  inference and present the result as fact.
 
 When **updating** `~/ai/crypto_base_scanner_desktop/deps/SUPERCHART_*.md` (staleness fix or new feature), always read `$SUPERCHART_DIR/docs/` alongside the latest source — the upstream docs are authoritative and usually already describe the change. Use source only to fill gaps or verify details the docs don't cover.
 
@@ -48,7 +75,8 @@ When **updating** `~/ai/crypto_base_scanner_desktop/deps/SUPERCHART_*.md` (stale
 ```
 ## Pattern: <short name>
 
-**Where in SC:** `path/to/file.ts:NN` (relative to $SUPERCHART_DIR)
+**Where in SC:** `path/to/file.ts:NN` (relative to $SUPERCHART_DIR) — a file you opened
+**Verified against:** `<short sha>` "<commit subject>"
 **How it works:** 2–4 sentence description of the mechanism.
 
 **Key snippet:**
@@ -62,6 +90,11 @@ When **updating** `~/ai/crypto_base_scanner_desktop/deps/SUPERCHART_*.md` (stale
 - Any SC API gaps that would need a new SC feature
 
 **Docs gap:** (only if this should be added to `~/ai/crypto_base_scanner_desktop/deps/`) — what to add and where.
+
+**Unverified:** (omit if empty) — anything you could not confirm in source, and why.
 ```
 
 Keep the report under 400 words. If the question spans multiple patterns, use one section per pattern.
+
+Mark every claim `(source)` or `(docs)`. A report with no `(source)` claims is a
+literature review, not an investigation — say so rather than implying otherwise.
