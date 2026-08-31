@@ -118,13 +118,26 @@ provider seam in `src/containers/scripts/**`, and plots + panes rendering.
 Done when "Run on chart" puts a working indicator on an SC chart. Proves the
 architecture; everything after is additive.
 
-**Phase 2 — Parity.** `draw.*` primitives via `onPrimitives`, `param.*`
-settings (needs the SC + `superchart-script` changes both), console logs,
-helper modules on the compile path, and real compiler diagnostics.
+**Phase 2 — Parity.** `param.*` settings (needs the SC + `superchart-script`
+changes both), console logs, helper modules on the compile path, real compiler
+diagnostics, and making `draw.*` primitives scale. Scoped in
+[phase-2/prd.md](phase-2/prd.md) (`sc-script-parity`).
+**Correction, 2026-08-31:** primitives were listed here as missing. They are
+not — `draw.*` already renders end to end on SC (verified in-browser; see
+phase-1/review.md item 37). What phase 2 owes them is batching: 8k overlays
+are O(n²) through SC's engine, and 663 ms to tear down.
 
 **Phase 3 — Trimmings.** Backtest wiring (near-zero — the report is
 chart-agnostic; only the trades overlay is coupled), "add to charts"
 persistence across layouts, and suppressing SC's Script button.
+
+**Carried into phase 3 (found 2026-08-31, during phase-2 review):** SC's
+settings modal reaches `modifyIndicator` with raw `BACKEND_<id>` names, so a
+backend indicator can be snapshotted into saved chart state the same way script
+indicators were. Same structural leak, different prefix; unreported by users so
+far and outside scripting, so phase 2 fixed only the `SCRIPT_` half at the
+chokepoint. Areg's call, 2026-08-31: note it for phase 3 rather than widen
+phase 2.
 
 **Phase 4 — Orders.** `strategy.long/short/close` → `executeAsBot`. Split out
 because SC has no order concept today and the mapping is an open design
@@ -184,7 +197,7 @@ Multi-day integration, not a glue task. Phase 1 carries the architectural risk;
 in this folder when it starts.
 
 - [ ] Phase 1 — Spine (SC entry point, provider seam, plots + panes) — [prd](phase-1/prd.md) `sc-script-spine`
-- [ ] Phase 2 — Parity (primitives, params, logs, modules, diagnostics)
+- [ ] Phase 2 — Parity (params, logs, modules, diagnostics, primitive scaling)
 - [ ] Phase 3 — Trimmings (backtest, add-to-charts, hide Script button)
 - [ ] Phase 4 — Orders (`strategy.*` → `executeAsBot`)
 

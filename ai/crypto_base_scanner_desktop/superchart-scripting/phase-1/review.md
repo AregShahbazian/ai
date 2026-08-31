@@ -156,10 +156,38 @@ needed.
 ### D. Known-absent (phase 1 non-requirements)
 
 Confirm these fail *cleanly* on SC — no crash, no half-rendered indicator.
-**All five verified by Areg, 2026-08-28.**
+**All five verified by Areg, 2026-08-28** — but items 37 and 38 were
+subsequently found to be inaccurate; see the corrections below.
 
-37. ✅ `draw.line` on SC → plots render, primitives absent, no throw. (Areg)
-38. ✅ `param` on SC → defaults used, no settings dialog, no throw. (Areg)
+37. ❗ **Corrected 2026-08-31 — this item was wrong.** It originally read
+    "`draw.line` on SC → plots render, primitives absent, no throw". Primitives
+    are **not** absent: `draw.*` already works end to end on SC.
+
+    Re-tested in the browser against SC `2250192` + published
+    `@coinrayio/superchart-script` 0.1.8, with a script drawing all four kinds
+    plus a plot: `subscription.onPrimitives` is a function, SC registers it
+    (`useScriptIndicators.ts:752`), three full snapshots of 8025 primitives
+    arrived, and `chart.getOverlays()` then held `scriptMarker` ×8022,
+    `scriptBox` ×1, `scriptLine` ×1, `scriptLabel` ×1 — visually confirmed
+    (arrows on the 20-bar highs/lows, the range box, the dashed trend line,
+    the "20-bar high" label). `removeScriptIndicator("SCRIPT_1")` tore down all
+    8025 in 663 ms, leaving only the host's own overlays.
+
+    Most likely the original test predated the SC rebuild that phase 1 needed
+    (the same rebuild that fixed `onScriptIndicatorRemoved is not a function`).
+    Nothing in phase 1 depended on this item's verdict — it was a
+    known-absent check, and the capability being *present* breaks nothing.
+    Consequences are all in phase 2, whose scope shrinks accordingly; the
+    one new concern is that 8k overlays are slow enough to need batching
+    (see phase-2/prd.md R1).
+38. ⚠ `param` on SC → defaults used, no throw. (Areg)
+
+    **Amended 2026-08-31:** "no settings dialog" is not accurate either. The
+    gear on a `SCRIPT_` legend does open SC's settings modal — it is simply
+    *empty*, because `buildMetadata` in `superchart-script` hardcodes
+    `settings: []`. Worse, applying that empty modal writes `calcParams: []`
+    into autosave. Reported by the SC session from source; not independently
+    verified here. Phase-2 work, tracked as R2 in phase-2/prd.md.
 39. ✅ `log` on SC → Console panel silent, no throw. (Areg)
 40. ✅ `multi-module` on SC → the compile is rejected and nothing renders; the chart is unaffected. Exact message:
 
