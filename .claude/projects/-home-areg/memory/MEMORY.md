@@ -3,7 +3,8 @@
 - [orion: decentralization deprioritized](project_orion_decentralization_deprioritized.md) — P2P is post-MVP; local-first + central sync
 - [orion: MVP (first release) scope](project_orion_mvp_v01.md) — tracker + GPX/KML export + offline map storage; spec at ~/ai/orion/mvp.md; screen-off recording is the gate
 - [orion: dev stack & map plugin](project_orion_dev_stack.md) — web-first dev, maplibre_gl v0.26.1, iOS deferred; Phase 1 PRD at ~/ai/orion/phase-1/prd.md
-- [Altrady freelance situation](user_altrady_situation.md) — €25/hr since 2018, ~28h/wk, ~€33k/yr incl. bonus; rate anchor €50–60, options GROW/CAP/TAPER/BRIDGE; doc ~/ai/career/altrady-rate-negotiation.md
+- [Altrady freelance situation](user_altrady_situation.md) — €25/hr since 2018, ~28h/wk, ~€33k/yr incl. bonus; rate anchor €50–60, options GROW/CAP/TAPER/BRIDGE; nego trigger: scripting merged to SI or 2026-09-15, whichever first; doc ~/ai/career/altrady-rate-negotiation.md
 - [User runs long jobs himself](feedback_user_runs_generation.md) — set up scripts, hand over the command; don't launch generation/downloads unasked
 - [Laptop slow triage](reference_laptop_slow_triage.md) — 3 known causes, test under load first; details in ~/.claude/system.md
 - [Residency constraint for platform work](user_residency_constraint.md) — only AM residency viable (NL = taxes, PH impossible); Mercor out (no Armenia); micro1 accepts AM individual contractors (brother's precedent)
+- [Negotiation coaching](feedback_negotiation_coaching.md) — hold him to his floors (€45 hard/€50 preferred, open €55, flex hours not rate); he loses confidence when talked down; if nego succeeds, keep nudging LLM-depth/workflow skill growth
