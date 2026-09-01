@@ -131,6 +131,17 @@ closed** — every item here is only passed after a fresh reload with the IDE sh
     *How:* `chartController.storageAdapter.load()` after enabling a script and
     reloading. No `SCRIPT_*` entry, no `BACKEND_*` entry.
     *Result:* Verified: `storageAdapter.load()` contains no `SCRIPT_*` and no `BACKEND_*`.
+    **Correction (2026-09-01, post-review):** this passed, but it only ever
+    exercised the **autosave** path. Superchart's code review found the ephemeral
+    filter was applied inside `enqueueMutation` alone, so `loadState` hydrated
+    the cache raw, `saveState` wrote what it was handed, and — the reachable
+    case — `saveChartTemplate` copied the cached indicator list into a **chart
+    template**, where nothing ever cleans it. A user whose stored state predated
+    phase 3 (Areg's did) needed only to click "save layout" before any mutation.
+    Fixed in SC `c04109e`, filtered at all three boundaries. The phase-3
+    guarantee "nothing script-shaped enters persistence" was true of autosave
+    and false of templates; my check couldn't tell the difference because I only
+    ever read back the autosave.
 22. ✅ **No klinecharts warning at app load.**
     *Result:* Verified across many reloads this session: the only script-related console line is SC's deliberate "produced no plots or panes" warning (see the observations below), never the phase-2 klinecharts warning. *How:* reload with an enabled script and a clean console; the phase-2 warning must not return.
 23. ✅ **No provider-side script id is persisted anywhere.** *How:* grep localStorage for `SCRIPT_`. SC's ids are session-local (`SCRIPT_${++idCounter}`) and must never be written down.
