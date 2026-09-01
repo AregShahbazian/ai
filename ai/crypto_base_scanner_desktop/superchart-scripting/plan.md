@@ -118,18 +118,24 @@ provider seam in `src/containers/scripts/**`, and plots + panes rendering.
 Done when "Run on chart" puts a working indicator on an SC chart. Proves the
 architecture; everything after is additive.
 
-**Phase 2 — Parity.** `param.*` settings (needs the SC + `superchart-script`
-changes both), console logs, helper modules on the compile path, real compiler
-diagnostics, and making `draw.*` primitives scale. Scoped in
-[phase-2/prd.md](phase-2/prd.md) (`sc-script-parity`).
+**Phase 2 — Parity. DONE 2026-09-01.** `param.*` settings (needs the SC +
+`superchart-script` changes both), console logs, helper modules on the compile
+path, real compiler diagnostics, and making `draw.*` primitives scale. Scoped in
+[phase-2/prd.md](phase-2/prd.md) (`sc-script-parity`); verified in
+[phase-2/review.md](phase-2/review.md) — 52 of 53 items pass, item 31 blocked
+(below).
 **Correction, 2026-08-31:** primitives were listed here as missing. They are
 not — `draw.*` already renders end to end on SC (verified in-browser; see
-phase-1/review.md item 37). What phase 2 owes them is batching: 8k overlays
-are O(n²) through SC's engine, and 663 ms to tear down.
+phase-1/review.md item 37). What phase 2 owed them is batching: 8k overlays
+were O(n²) through SC's engine, and 663 ms to tear down — now 6 ms, via one
+`groupId: 'script:<hostId>'` per run.
 
-**Phase 3 — Trimmings.** Backtest wiring (near-zero — the report is
+**Phase 3 — Trimmings. DONE 2026-09-01.** Backtest wiring (near-zero — the report is
 chart-agnostic; only the trades overlay is coupled), "add to charts"
-persistence across layouts, and suppressing SC's Script button.
+persistence across layouts, and suppressing SC's Script button. Scoped in
+[phase-3/prd.md](phase-3/prd.md) (`sc-script-trimmings`); matrix rows 12 and
+15. Expected to touch cbsd and SC only — `superchart-script` takes no part in
+a backtest, confirmed 2026-09-01.
 
 **Carried into phase 3 (found 2026-08-31, during phase-2 review):** SC's
 settings modal reaches `modifyIndicator` with raw `BACKEND_<id>` names, so a
@@ -138,6 +144,38 @@ indicators were. Same structural leak, different prefix; unreported by users so
 far and outside scripting, so phase 2 fixed only the `SCRIPT_` half at the
 chokepoint. Areg's call, 2026-08-31: note it for phase 3 rather than widen
 phase 2.
+
+### Shipped — phase 3 (2026-09-01)
+
+One squashed commit per repo. `coinray_rest` took no part, so there is **no new
+package version and no CI change** — the alpha picks up SC's new branch head
+through the phase-2 repoints.
+
+| repo | branch | commit |
+| --- | --- | --- |
+| crypto_base_scanner_desktop | `feature/superchart-scripting` | `93e644217` |
+| Superchart | `feat/superchart-scripting` | `b586329` |
+
+Review: **36 of 40 pass, 4 blocked** ([phase-3/review.md](phase-3/review.md)).
+Four bugs were found and fixed during it, one of them a lifetime bug in phase-1's
+`useScriptRun` that affected both providers.
+
+**Open after phase 3:**
+- **Items 28-31 are ⛔ blocked, not deferred.** Altrady wires no
+  `indicatorProvider`, so no `BACKEND_` indicator can exist to test the
+  persistence fix against. SC's half ships on its unit coverage. Revisit only if
+  Altrady ever wires a provider.
+- **The ta-v2 compiler redeploy is still pending**, and phase 3 gave it a second
+  reason: whether a `plot()` registers depends on how much history happens to be
+  loaded when a script is added, so the same script can render from the enabled
+  list and draw nothing when previewed. Human step; closes matrix row 3's
+  `options` gap in the same deploy.
+- **The backtest engine's `pnl` sign is worth a look** — a 90-day run returned 81
+  trades and zero winners, including longs exiting above their entry with a large
+  negative pnl. Server-side in `coinray_script`, and it predates the port: the
+  TradingView path has always coloured from the same field.
+- **The three CI repoints from phase 2 still stand** and revert together when
+  `feat/superchart-scripting` and `feat/overlay-store-scaling` reach their mains.
 
 **Phase 4 — Orders.** `strategy.long/short/close` → `executeAsBot`. Split out
 because SC has no order concept today and the mapping is an open design
@@ -196,13 +234,45 @@ Multi-day integration, not a glue task. Phase 1 carries the architectural risk;
 `[ ]` not started · `[~]` in progress · `[x]` done. Each phase gets its own PRD
 in this folder when it starts.
 
-- [ ] Phase 1 — Spine (SC entry point, provider seam, plots + panes) — [prd](phase-1/prd.md) `sc-script-spine`
-- [ ] Phase 2 — Parity (params, logs, modules, diagnostics, primitive scaling)
-- [ ] Phase 3 — Trimmings (backtest, add-to-charts, hide Script button)
+- [x] Phase 1 — Spine (SC entry point, provider seam, plots + panes) — [prd](phase-1/prd.md) `sc-script-spine`
+- [x] Phase 2 — Parity (params, logs, modules, diagnostics, primitive scaling) — [prd](phase-2/prd.md) `sc-script-parity`
+- [x] Phase 3 — Trimmings (backtest, add-to-charts, hide Script button) — [prd](phase-3/prd.md) `sc-script-trimmings`
 - [ ] Phase 4 — Orders (`strategy.*` → `executeAsBot`)
+
+### Shipped — phase 2 (2026-09-01)
+
+One squashed commit per repo, all pushed:
+
+| repo | branch | commit |
+| --- | --- | --- |
+| crypto_base_scanner_desktop | `feature/superchart-scripting` | `f6d99e239` + `dc4a13cbc` (CI/version) |
+| Superchart | `feat/superchart-scripting` | `5986d63` |
+| coinray-chart (SC submodule) | `feat/overlay-store-scaling` | `e5f19660` (new branch) |
+| coinray_rest | `master` | `8ab06cdf` + `155723a3`, published as `@coinrayio/superchart-script@0.1.9` |
+
+**Open after phase 2:**
+- **Item 31 (publish a helper module) is ⛔ blocked**, not failed: the backend
+  returns 422 `{"error": ["A username is required to publish a module"]}` even
+  with the profile username set. The endpoint lives in `crypto_base_scanner` —
+  a fourth repo, outside this port. Re-test once it accepts module creation.
+- **ta-v2 compiler redeploy pending.** `buildMetadata` was fixed in three
+  layers; the SDK layer only reaches scripts compiled by an updated ta-v2. Until
+  that deploys, a `plot()` of an all-NaN warmup window can still render nothing
+  unless the script sets `config.warmup`.
+- **Three CI repoints must be reverted on merge** (all marked TEMPORARY):
+  SC branch in `d1f7d4943`, and the coinray-chart submodule branch plus the
+  `0.1.9` pin in `dc4a13cbc`. Revert when `feat/superchart-scripting` and
+  `feat/overlay-store-scaling` reach their mains.
 
 ### Decisions taken
 - **2026-08-28 — Option B, a public entry point in SC** (not SC's editor slot).
   Reasoning under "The four real gaps" #1.
 - **2026-08-28 — TV and SC coexist.** All 15 capability-matrix rows must work on
   both, eventually; the phases order the work, they do not reduce scope.
+- **2026-08-31 — the seam stays structural.** Phase 2 added a second, opposite
+  direction to the bridge (chart → IDE: `registerConsumer` / `publishLogs` /
+  `publishFailure`) without a single `chartProvider` test anywhere in the
+  scripting path. Selection is still "which chart tree mounted this renderer",
+  per principle #4 above. A third provider remains one adapter + one renderer.
+- **2026-08-31 — fixes get their own WIP commits, squashed at phase end.** One
+  commit per repo per phase; WIP commits are never pushed.
