@@ -5,13 +5,23 @@ the coinray-chart submodule commit `e5f19660`, and the two unpushed review
 fixes `f5b604b` and `c04109e`. Reviewed as the code stands, against SC's own
 patterns.
 
-**Result: 23 findings, 6 fixed, 17 recorded and deliberately not fixed.**
+**Result: 23 findings, 11 fixed, 12 recorded as NOT BEING DONE.**
+
+Areg's decisions after pass 3: fix 10, drop 9, forget 8 (and 21-item-4 with it).
+
+**On the recorded ones: they are not a backlog.** Areg does not keep tickets —
+"we fix or forget". Everything below that is not fixed has been *decided
+against*, with the reason. Nothing here is deferred, pending, or awaiting
+revisit; if a recorded item ever needs doing, it will be because someone hits
+it and rediscovers it, and this file is here so that person finds the analysis
+already done. Read "not fixed" as "not doing, because —", never as "to do".
 Plus **four corrections to earlier passes**, listed in their own section — the
 most important being that the pass-2 "checked and clean" claim about the
 persistence filter was false.
 
-Fixes live in `f5b604b` + `c04109e` (passes 1-2, unpushed) and in the working
-tree (pass 3, **uncommitted** — see "Pass-3 fixes" below).
+Fixes live in `f5b604b` + `c04109e` (passes 1-2), `1749193` (pass-3
+persistence + docs), `7e2022e` (findings 17-19, 23) and `84d582a` (finding 10).
+All unpushed.
 
 ## How this was run
 
@@ -36,7 +46,7 @@ they cover and did not contradict them.
 
 Bar applied, per Areg: fix only what is obviously a defect and obviously needs
 fixing; write down anything theoretical and leave the code alone. Pass 3
-changed six things and left seventeen alone.
+changed ten things and left thirteen alone.
 
 ## The premise that scopes findings 3, 4, 5, 16, 23
 
@@ -52,11 +62,13 @@ is reachable on a plain symbol change, with no fallback path involved.
 
 ---
 
-## Pass-3 fixes (in the working tree, UNCOMMITTED)
+## Pass-3 fixes
 
-Left uncommitted deliberately so Areg can read the diff before it is folded
-into a `[sc-script-parity]` / `[sc-script-trimmings]` commit. `tsc --noEmit`
-clean (both configs), vitest 36/36, eslint no new errors.
+Two commits, both `[sc-script-trimmings]`, neither pushed. Each verified
+`tsc --noEmit` clean, vitest 36/36, and eslint byte-identical to the
+pre-change baseline (41 problems, measured via `git stash`).
+
+### `1749193` — persistence boundaries + docs
 
 `src/lib/hooks/useChartState.ts` — three one-line applications of the existing
 `dropEphemeralIndicators` helper, completing what `c04109e` set out to do
@@ -72,8 +84,49 @@ clean (both configs), vitest 36/36, eslint no new errors.
 docs (finding 22): `ScriptProvider.updateSettings?`, `modules` on `compile()`
 and on `ScriptExecuteParams`, and `ScriptDiagnostic.file?`.
 
-Nothing else was touched. Findings 17-20 and 23 are real but their fixes carry
-design choices that are Areg's, not a reviewer's.
+### `7e2022e` — findings 17, 18, 19, 23 (approved by Areg after pass 3)
+
+Fixed as a set, per Areg's framing: one omission at four call sites, whose
+shared question is *what removing something means when a script owns it*. The
+rule now encoded at every site — **a user-facing bulk chart operation never
+destroys a runtime-owned object; a script leaves the chart only through its
+owner** (`useScriptIndicators.remove`, i.e. the pane-legend ✕ or
+`removeScriptIndicator`).
+
+- **17** — `removeAllOverlays`' no-groupId branch removes by id, skipping
+  `isScriptOverlay`. The `groupId` bulk path is untouched: that is how the
+  owner tears a whole script's primitives down.
+- **18** — the object tree filters `isEphemeralIndicatorName` out of its
+  indicator listing. Deliberately *not* given teardown branches — hiding the
+  rows removes the orphaning path entirely, and the pane legend already routes
+  removal correctly. Duplicating that branch is how it would drift.
+- **19** — `applyChartTemplate`'s two wipes are filtered. **This reverses the
+  recommendation this document made** — see the note below.
+- **23** — preconditions moved above the teardown; a rejected re-execute drops
+  the record and fires `onRemoved` before propagating. Emission is guarded on
+  the delete actually removing the record, so a `remove()` landing during the
+  await cannot produce two removal notices for one removal (caught reviewing
+  the implementation, not present in the spec).
+
+`isEphemeralIndicatorName` is now exported, which finding 15 also wanted.
+`docs/scripts.md` and `docs/storage.md` updated where behaviour changed.
+
+**Reversal on 19, recorded because this document got it wrong.** Findings
+17-19 above originally recommended *tearing scripts down properly* on
+`applyChartTemplate` (firing `onRemoved`), calling it "the smaller change".
+Both halves of that were wrong. `applyChartTemplate` is reachable from three
+separate `useChartState` instances (`SuperchartComponent.tsx:191`,
+`useChartTemplates.ts:54`, `chart-browser/index.tsx:34`) while
+`useScriptIndicators` is instantiated once — so tear-down would have needed a
+store-level teardown registry to fire on the layout menu and chart browser,
+which is the *larger* change. More importantly it would have given two
+different answers to the same question (don't-touch at the object tree,
+tear-down at template apply), which is exactly how a sixth site picks the
+wrong one. Net behaviour: applying a layout leaves a running script running.
+
+**Still deliberately not fixed**, both now one-liners against the exported
+predicate: `lockAllOverlays` and `buildIndicatorsJson` (see Theoretical).
+Findings 20 and 21-item-4 also remain open by design.
 
 ---
 
@@ -104,15 +157,24 @@ the same code block has a **reachable sibling** the rating missed: the
 and it rejects after the same teardown. See finding 23. The disposition should
 be "recorded, needs a policy decision", not "unreachable".
 
-### C3. Finding 8 is no longer purely pre-existing
+### C3. Finding 8 — retracted and restated (pass 3's own error)
 
-Pass 2 recorded `useBackendIndicators.ts:226-256` / `:262-275` as a stale-
-mirror/revision problem, "unrelated to these commits". Since `c04109e`, those
-same two `adapter.save` calls are also the largest hole in the phase-3
-ephemeral-name invariant: both load the stored record raw, mutate
-`state.indicators` in place, and write it back — re-persisting exactly the
-pollution phase 3 promised would self-clean, on every backend add, remove and
-settings Apply. Folded into finding 21.
+Pass 3 originally wrote here that finding 8 "is no longer purely pre-existing".
+**That was wrong, and it is retracted.** Re-derived from the code: neither
+`c04109e` nor `1749193` made finding 8 worse or newly reachable. Its mechanism
+— `syncToStorage` bumping the stored revision behind `useChartState`'s back, so
+a later revision-less `saveState` clobbers the entry — is untouched by both
+commits, and the entries it writes are keyed by the stable `definition.name`,
+so `dropEphemeralIndicators` never eats them. Pass 2's "pre-existing, out of
+scope" rating was correct.
+
+What is true, and what C3 should have said, is narrower: **those same two
+`adapter.save` calls carry a second, different defect** — they load the stored
+record raw and write it back, re-persisting any `SCRIPT_*`/`BACKEND_*`
+pollution already in it. That is **finding 21 item 4, not finding 8**. Two
+defects at the same two lines, one inherited and one created by phase 3's
+invariant. Conflating them made finding 8 look like something this phase
+touched. It isn't.
 
 ### C4. Finding 4's mechanism is stronger than recorded
 
@@ -128,7 +190,7 @@ replaces the template. So the plot deterministically blinks and returns
 
 ## New findings (pass 3)
 
-### 17. The object tree's "Remove all" destroys script primitives it deliberately hides
+### 17. The object tree's "Remove all" destroys script primitives it deliberately hides — FIXED (`7e2022e`)
 
 `src/lib/widget/object-tree/index.tsx:145` → `useChartState.ts:802`
 
@@ -156,15 +218,11 @@ own destructive *action*. The same unfiltered call also strands
 `utils/alerts.ts`'s registry and `orderLineApi`'s id map, so the fix belongs at
 `removeAllOverlays`, not in the reconciler.
 
-**Not fixed.** The engine has no "remove all except" filter, so the fix is
-either an id loop over `getOverlays().filter(o => !isScriptOverlay(o))` —
-trading a bulk call for O(n), which is what the phase-2 batching exists to
-avoid — or a new engine-side exclusion filter in the submodule. That is a
-design call. Recommend the id loop: at user-drawing scale (tens) the cost is
+**Fixed** by the id loop — at user-drawing scale (tens) the cost is
 irrelevant, and the bulk path stays available for the script teardown that
 needs it.
 
-### 18. The object tree lists ephemeral indicators, and its ✕ orphans a running script
+### 18. The object tree lists ephemeral indicators, and its ✕ orphans a running script — FIXED (`7e2022e`)
 
 `src/lib/widget/object-tree/index.tsx:75-87` and `:126-130`
 
@@ -184,14 +242,11 @@ explicit `BACKEND_`/`SCRIPT_` branches routing to the correct teardown. Two ✕
 buttons for the same indicator; one is right, one orphans the script. Textbook
 "filter applied at one boundary but not its sibling".
 
-**Not fixed.** Two defensible answers — hide ephemeral indicators from the tree
-(consistent with hiding their primitives, and with persistence already
-treating them as non-existent), or give the tree the same prefix branches the
-pane legend has. The first is smaller and matches the phase-2 rationale; the
-second is friendlier. Areg's call. Either needs `isEphemeralIndicatorName`
-exported from `useChartState.ts`, which finding 15 already wants.
+**Fixed** by hiding them — consistent with hiding their primitives and with
+persistence already treating them as non-existent, and it removes the
+orphaning path rather than duplicating a teardown branch that could drift.
 
-### 19. Applying a chart template silently orphans every running script
+### 19. Applying a chart template silently orphans every running script — FIXED (`7e2022e`)
 
 `src/lib/hooks/useChartState.ts:1966-1967`
 
@@ -207,11 +262,9 @@ Phase 3's PRD is "add to charts persistence across layouts", so scripts and
 chart layouts are explicitly meant to coexist — this is in scope, not adjacent
 to it.
 
-**Not fixed** — this is a product question, not a repair. Applying a layout
-could reasonably (a) tear running scripts down properly, firing `onRemoved` so
-the host can re-add them, or (b) preserve them across the swap. Both are
-defensible; picking one is Areg's. Recommend (a): it matches "apply is
-replace, not additive", and it is the smaller change.
+**Fixed** by (b), preserving them — see the reversal note under `7e2022e`.
+The recommendation originally made here, (a) tear-down, was both larger than
+claimed and inconsistent with 17's answer.
 
 ### 20. The settings-modal staleness has a `BACKEND_` twin, reachable without the fallback path
 
@@ -233,7 +286,9 @@ Inputs tab disappears entirely, and `onSettingsApply`'s branches are both false
 `initialValues` memo recomputes off the *edited* values once `defs` changes
 identity, so "change length 14→50, hit Cancel" leaves it at 50.
 
-**Not fixed** — same fix as finding 3, and it strengthens the case for it. The
+**NOT DOING for now** — same fix as finding 3, and it strengthens the case for
+it, so the two stand or fall together rather than being ticketed separately.
+The
 modal should capture the **stable** id at open time (`scriptId` / the backend
 `definition.name`) and re-resolve the live template name from it. That is the
 one change that fixes 3, 4, 20 and most of 23's blast radius. Separately,
@@ -271,10 +326,11 @@ or leaves for storage. `c04109e` closed three. Four were left open:
 
 **1-3 FIXED** in the working tree — three one-line uses of the existing helper,
 which returns the same object when there is nothing to filter, so the common
-path is unchanged. **4 not fixed**: it needs `dropEphemeralIndicators` (or at
-least the predicate) exported across hooks, and that file's write path already
-has an open design question in finding 8. Recommend it rides finding 8's
-ticket.
+path is unchanged. **4 — NOT DOING** (Areg, after pass 3). It needs the predicate exported
+across hooks, and those two lines already carry finding 8's separate
+persistence-ownership question. Both are unreachable in Altrady, which wires
+no `indicatorProvider`. Forgotten together with finding 8 rather than
+ticketed: if an SC consumer ever hits either, the analysis is here.
 
 *Not a defect:* `syncToStorage` writes under the stable `definition.name`, not
 `BACKEND_<id>`, so the phase-3 widening does not eat legitimate backend
@@ -303,7 +359,7 @@ contract at all.
 **FIXED** in the working tree. The `updateSettings?` entry says why to
 implement it.
 
-### 23. A rejected re-execute leaves the chart empty and the record alive
+### 23. A rejected re-execute leaves the chart empty and the record alive — FIXED (`7e2022e`)
 
 `src/lib/hooks/useScriptIndicators.ts:927-975` (`doUpdate`)
 
@@ -325,13 +381,11 @@ Note the asymmetry with `add()`, which the design doc cites as precedent for
 propagating the rejection: `add()` rejecting leaves nothing behind, because
 nothing was rendered yet. `update()` rejecting leaves a hole.
 
-**Not fixed** — the repair is a policy choice. Either delete the record and
-`emitRemoved(hostId)` on any post-teardown failure (honest, but contradicts the
-documented "never fires" guarantee), or don't tear down until the new
-subscription resolves (preserves the guarantee, but briefly doubles what is on
-the chart). Recommend the first, with the docs amended. Pass 3 deliberately did
-**not** also reorder finding 16's guards above the teardown: pass 2 explicitly
-decided against that, and moving them fixes nothing real on its own.
+**Fixed** by the first option — record dropped, `onRemoved` fired, rejection
+still propagated, docs amended. Finding 16's guards were reordered as part of
+the same change (pass 2 had declined to move them alone; with the rejection
+case being fixed at the same site, doing both together is what makes the
+teardown ordering honest).
 
 ---
 
@@ -347,13 +401,21 @@ independently re-derived by pass 3, and the chain-map cleanup's identity check
 before delete is correct), 7 (ephemeral indicators bypass three save paths —
 see finding 21 for what it missed).
 
-**Recorded, not fixed:** 3 (settings modal inert after a fallback re-execute —
+**Recorded as not being done:** 3 (settings modal inert after a fallback re-execute —
 independently re-derived by pass 3; see also 20), 4 (visibility lost — see
 C4), 5 (one provider round trip per control interaction), 6 (`onRemoved`
-ordering in the bulk removal path), 8 (backend writes bypass the chart-state
-mirror — see C3), 9 (`restoreChartState` discards unflushed edits), 10
-(restore's deferred pass outlives its gate — still the recorded item most
-likely to bite someone), 11 (full-replace can lose unchanged overlays on a
+ordering in the bulk removal path), **10 — FIXED (`84d582a`)** (restore's
+deferred indicator pass outlives its gate: it now claims a store-level
+generation before its first await and bails when superseded, applyChartTemplate
+bumps that generation before its wipe, and the timer is cancelled on unmount
+with the chart re-read fresh inside the callback — the 500ms is untouched,
+being load-bearing for chart init), **8 — NOT DOING** (backend writes bypass the
+chart-state mirror; inherited, unreachable in Altrady, and the fix is a
+persistence-ownership decision rather than a repair — see C3), **9 — DROPPED
+on evidence** (`restoreChartState` discards unflushed edits: it requires
+`autoSaveDelay > 0`, and cbsd measured it at **0** at runtime and passes it
+nowhere in `src/`, so there is no pending timer and nothing to lose — the
+finding is unreachable, not merely unlikely), 11 (full-replace can lose unchanged overlays on a
 failed batch), 12 (paint order depends on the reconcile path), 13 (backend
 eye-toggle no longer dirties the template — accepted, stated in the design),
 14 (`reconcileApi` closes over the render-time chart), 15 (ephemeral-name
