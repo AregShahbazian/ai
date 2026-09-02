@@ -232,6 +232,14 @@ want is your choice."
 
 ## 5. How to open the conversation (agreed)
 
+> **Trigger status (2026-09-02):** `feature/superchart-scripting` is merged into
+> `feature/superchart-integration`, and Areg gave Benoist the heads-up that
+> scripting is merged. Benoist came back with review/feedback issues, so Areg
+> decided to clear those **before** opening the rate conversation. Opening is
+> therefore gated on "review feedback handled", with **2026-09-15 as the hard
+> backstop** — if the review is still open then, that is a conscious
+> re-decision, not a silent slide.
+
 - Scheduled 30-min call, preceded by a one-line heads-up naming the topic
   ("I want to talk about my rate and role going forward").
 - Four beats: (1) the fact — €25 since 2018, accepted deliberately, can't
