@@ -172,8 +172,10 @@ Four bugs were found and fixed during it, one of them a lifetime bug in phase-1'
 - **The ta-v2 compiler redeploy is still pending**, and phase 3 gave it a second
   reason: whether a `plot()` registers depends on how much history happens to be
   loaded when a script is added, so the same script can render from the enabled
-  list and draw nothing when previewed. Human step; closes matrix row 3's
-  `options` gap in the same deploy.
+  list and draw nothing when previewed. Human step — `strategy_compiler`'s
+  `build.sh` + `k8s.yml`; nothing in Altrady or SC changes.
+  **Verified pending 2026-09-02** — see the standing test below. It does *not*
+  close matrix row 3: `param.options` compiles on the deployed host already.
 - **The backtest engine's `pnl` sign is worth a look** — a 90-day run returned 81
   trades and zero winners, including longs exiting above their entry with a large
   negative pnl. Server-side in `coinray_script`, and it predates the port: the
@@ -257,10 +259,40 @@ One squashed commit per repo, all pushed:
   returns 422 `{"error": ["A username is required to publish a module"]}` even
   with the profile username set. The endpoint lives in `crypto_base_scanner` —
   a fourth repo, outside this port. Re-test once it accepts module creation.
-- **ta-v2 compiler redeploy pending.** `buildMetadata` was fixed in three
-  layers; the SDK layer only reaches scripts compiled by an updated ta-v2. Until
-  that deploys, a `plot()` of an all-NaN warmup window can still render nothing
-  unless the script sets `config.warmup`.
+- **ta-v2 compiler redeploy pending — confirmed still pending 2026-09-02.**
+  `buildMetadata` was fixed in three layers; the SDK layer only reaches scripts
+  compiled by an updated ta-v2.
+
+  **Symptom (SC only, and a TV parity break).** The deployed SDK early-returns
+  on `isNaN(value)` in `plot`/`plotPane`, so a NaN bar emits **no event at all**.
+  `StrategyHost.plotNames` is built from observed events, so a plot that is NaN
+  across the whole probe window is never seen, `buildMetadata` returns
+  `plots: []`, and the add *succeeds* while nothing renders — no line, no name,
+  no error. In practice that is any script using `ta.*` without
+  `config.warmup`, which is the natural thing to write. TV is unaffected: its
+  metainfo comes from *declared* plots.
+
+  The legend degrades two different ways, both observed: the indicator's raw
+  **source** appears as its name, or no legend row is added at all.
+
+  **Standing test — run on an SC tab.** This plots NaN forever, so declaring
+  warmup cannot rescue it, which is what makes it discriminate:
+
+  ```ts
+  import { plot, config } from "@coinray/strategy"
+
+  export function onBar(): void {
+    config.warmup(1)
+    plot("nanline", NaN)
+  }
+  ```
+
+  - **Old SDK (redeploy needed):** nothing plotted, no `nanline` in the legend.
+  - **New SDK (deployed):** legend reads `nanline` with no line drawn — the name
+    survives, the value does not.
+
+  Ran 2026-09-02 on the alpha: no legend entry, so the deployed compiler is
+  still old.
 - **Three CI repoints must be reverted on merge** (all marked TEMPORARY):
   SC branch in `d1f7d4943`, and the coinray-chart submodule branch plus the
   `0.1.9` pin in `dc4a13cbc`. Revert when `feat/superchart-scripting` and

@@ -91,9 +91,19 @@ package, not just the diff:
     na guard, so `StrategyHost.plotNames` sees only finite plot calls and the
     undeclared-warmup silent-nothing (`buildMetadata` fix, phase 2) remains
     reproducible in Altrady until the redeploy
-    (`strategy_compiler/build.sh` + `k8s.yml`, Areg/Benoist's step — also
-    closes matrix row 3's `options` rejection). Old-SDK scripts are otherwise
-    unaffected by the plotNames change (declared set == events-derived set).
+    (`strategy_compiler/build.sh` + `k8s.yml`, Areg/Benoist's step). Old-SDK
+    scripts are otherwise unaffected by the plotNames change (declared set ==
+    events-derived set).
+
+    **Confirmed still pending 2026-09-02** with the `plot("nanline", NaN)`
+    discriminator — no legend entry, so the guard is still in the deployed SDK.
+    The standing test and the full symptom write-up are in `plan.md`.
+
+    **Correction:** this does *not* also close matrix row 3. `param.options`
+    compiles on the deployed host today; the red marker in the editor comes from
+    a stale function table in `@coinrayio/superchart-script` 0.1.9
+    (`dist/index-D_B5lGRn.js:581-583` lists `param.float`/`int`/`bool_` and
+    stops), which is a client-side linter with no bearing on the deployment.
 
 11. **Metadata is fixed at subscribe** — `updateSettings` re-runs the script
     but does not rebuild `IndicatorMetadata` (plots/settings defs), matching

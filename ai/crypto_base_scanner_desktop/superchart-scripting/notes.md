@@ -193,10 +193,22 @@ Both blockers that stood in front of the port are gone.
   (`trading-layouts-controller.js`, `correctLayoutOnce`) because the SC branch no
   longer exports that constant. Test old saved custom layouts for wrong tab-strip
   heights; if SC needs the patch, it needs its own constant.
-- **`param.options` is rejected by the deployed compiler.** It exists in
-  coinray_rest master (`sdk/index.ts:283`, added `975b1598`) but the deployed
-  `strategy_compiler` predates it: `Could not find function or function reference
-  'param.options'`. Needs a redeploy, not a code change.
+- **`param.options` shows a false error marker in the editor.** ~~Rejected by the
+  deployed compiler.~~ **Corrected 2026-09-02:** it compiles fine on the deployed
+  host and the resulting picker works. The marker
+  (`Could not find function or function reference 'param.options'`) comes from a
+  *client-side* linter in `@coinrayio/superchart-script` 0.1.9, which regex-scans
+  calls against a hardcoded table — `dist/index-D_B5lGRn.js:581-583` declares
+  `param.float`, `param.int`, `param.bool_` and stops. Cosmetic but confusing,
+  and it affects TV and SC alike (shared IDE editor). Fix is one table entry plus
+  a 0.1.10; nothing to do with the ta-v2 redeploy.
+- **`compileStrategy` swallows one of the two 422 body shapes.** The endpoint
+  answers either `{"errors": [...]}` (asc diagnostics) or
+  `{"error": {code, message}}` (e.g. `Invalid params: strategy failed
+  validation: …`). The package reads only `errors`
+  (`dist/index-D_B5lGRn.js:452`), so a shape-B 422 degrades to the generic
+  `compile failed with status 422` and the real message is discarded. Latent —
+  not the cause of anything seen so far, but it makes those failures unreadable.
 - SC's new primitive rendering has **not been seen in a browser** — it is
   unit-tested (14/14) and typechecks, but nothing in this app feeds it yet.
 - How orders should map onto SC is still open. SC renders plots and primitives;

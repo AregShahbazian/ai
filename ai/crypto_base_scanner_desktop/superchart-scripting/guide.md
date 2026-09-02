@@ -56,7 +56,7 @@ Starter/probe scripts live code-side in
 |---|---|---|---|---|
 | 1 | `plot` — line on price pane | ✅ works | ✅ fixed | 2%-offset probe + SMA both drawn |
 | 2 | `plotPane` — sub-pane | ✅ works | ✅ fixed | |
-| 3 | `param.*` inputs in study dialog | ⚠ partial | ✅ fixed | int/float/bool_ ok; `options` rejected — deployed compiler older than the commit that added it |
+| 3 | `param.*` inputs in study dialog | ✅ | ✅ fixed | int/float/bool_ and `options` all compile and render. The editor's red marker on `param.options` is a stale function table in the npm package's linter, not a compiler rejection (corrected 2026-09-02) |
 | 4 | `draw.line` | ✅ works | ✅ | keyed `id` upserts. **A draw-only script never runs on TV** — needs >=1 `plot()`. Plot-count change isn't in `structureKey`, so it needed a manual `reloadTradingView()` |
 | 5 | `draw.marker` | ✅ works | ✅ | Arrow up/down per bar, id-keyed per `barTime()`. **Script *name* isn't in `structureKey` either** — switching scripts with identical inputs+warmup didn't re-register; needed a manual reload |
 | 6 | `draw.box` | ✅ works | ✅ | Rolling 20-bar range box, one id → slides. Colour edits propagate (verified yellow/red). `rgba()`'s 4th arg is **alpha** — `rgba(0,0,0,0)` is invisible, not black. Auto-reloaded because warmup differed |

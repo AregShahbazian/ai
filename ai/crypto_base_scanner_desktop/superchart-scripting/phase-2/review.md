@@ -330,10 +330,15 @@ the browser yet — see 2.
    **Fixed in coinray_rest, but not yet reachable here.** The fix has three
    layers; the third is in the `@coinray/strategy` SDK that the *compiler*
    bundles, and Altrady dev compiles against the deployed `ta-v2` host, which is
-   behind (it still rejects `param.options` — that is the same staleness that
-   has kept matrix row 3 at ⚠ since phase 1). Until that host is updated, or dev
-   is pointed at a locally-run `strategy_compiler`, undeclared-warmup scripts
-   keep failing silently in this app.
+   behind. Until that host is updated, or dev is pointed at a locally-run
+   `strategy_compiler`, undeclared-warmup scripts keep failing silently in this
+   app. Re-confirmed 2026-09-02 with the `plot("nanline", NaN)` discriminator
+   (standing test in `plan.md`).
+
+   ~~That is the same staleness that has kept matrix row 3 at ⚠ since phase 1.~~
+   **Wrong, corrected 2026-09-02:** `param.options` compiles on the deployed
+   host; its editor marker is a stale linter table in the npm package. The two
+   are unrelated, and row 3 is no longer partial.
 
    No decision needed, and **nothing in this checklist depends on it** — it is
    not one of the 53 items. Deferred as a known gap.
