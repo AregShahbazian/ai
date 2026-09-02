@@ -56,6 +56,10 @@ Nothing in `src/containers/trade/trading-terminal/widgets/super-chart/` passes a
    colliding with Altrady's own toolbar. Upstream fix.
 4. **Orders are architecturally undecided.** SC has no order concept;
    `executeAsBot` exists but nothing maps `strategy.long/short/close` onto it.
+   **Out of scope.** The task is to port TradingView's scripting features, and
+   TV has no orders either — it drops `strategy.*` with a console warning. Wiring
+   `executeAsBot` would be new capability, not parity, so it is not part of this
+   plan. Revisit only as its own piece of work if scripts should trade live.
 
 **Coexistence is a hard constraint (Areg, 2026-08-28):** TV and SC both keep
 working; nothing may break for either. Consequences: the SC path is additive
@@ -177,10 +181,6 @@ Four bugs were found and fixed during it, one of them a lifetime bug in phase-1'
 - **The three CI repoints from phase 2 still stand** and revert together when
   `feat/superchart-scripting` and `feat/overlay-store-scaling` reach their mains.
 
-**Phase 4 — Orders.** `strategy.long/short/close` → `executeAsBot`. Split out
-because SC has no order concept today and the mapping is an open design
-question, not a port.
-
 ### Repos touched
 - **SC** — public entry point, Script-button suppression, pass `settings` to
   `executeAsIndicator` + an `updateSettings`. Smallest diff, highest leverage.
@@ -237,7 +237,9 @@ in this folder when it starts.
 - [x] Phase 1 — Spine (SC entry point, provider seam, plots + panes) — [prd](phase-1/prd.md) `sc-script-spine`
 - [x] Phase 2 — Parity (params, logs, modules, diagnostics, primitive scaling) — [prd](phase-2/prd.md) `sc-script-parity`
 - [x] Phase 3 — Trimmings (backtest, add-to-charts, hide Script button) — [prd](phase-3/prd.md) `sc-script-trimmings`
-- [ ] Phase 4 — Orders (`strategy.*` → `executeAsBot`)
+
+The port is complete at phase 3. There is no phase 4: orders were never a
+TradingView scripting feature, so there is nothing to port (see gap 4 above).
 
 ### Shipped — phase 2 (2026-09-01)
 
