@@ -35,6 +35,14 @@ was changed.
 
 ## Rules
 
+- **A problem you found is information, not a work order.** Never revert, undo,
+  delete, roll back, restart, or "restore a known-good state" to recover from
+  something you discovered — a crash, a failing test, a bad upgrade, a mistake
+  of your own. Report the finding and stop; the decision is mine. This holds
+  even when the fix looks obvious, is easily reversible, or unblocks me. It
+  covers reverting commits, discarding my uncommitted changes, reinstalling
+  deps, killing servers I'm using, and writing the conclusion into memory or
+  docs before I've reached it.
 - **Never `git push` unless explicitly told to.** Applies to every repo. Commit
   when asked; never push on your own.
 - **Never edit a connected device without asking.** Any write to an attached
