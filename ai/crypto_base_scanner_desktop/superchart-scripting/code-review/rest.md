@@ -118,3 +118,47 @@ package, not just the diff:
 Live-app behavior (Areg's 53-item review pass covers it) and the Rust crates
 (phase 2 touched only the SDK line in `strategy_compiler`; the native host
 was read for parity checks, not modified).
+
+## Addendum 2026-09-02 — false markers in the script editor's linter
+
+Three fixes, all **reproduced in the running app by Areg before being made** —
+that sequence is now the rule, not a courtesy (see the note at the end).
+Shipped as **0.1.10** (`e58bc8f1` fix, `5f1dfad1` bump, master `5f1dfad1`);
+cbsd pinned in `c067f8e6f`.
+
+12. **`param.options` was missing from the language function table**
+    (`src/language.ts`, `// param.*` block). The client-side linter flagged it
+    "Could not find function or function reference", though the deployed
+    compiler accepts it and the picker works — so this was never the ta-v2
+    staleness it had been recorded as. **Fixed** — table entry matching the SDK
+    signature `options(name, def, labels: string[]): i32`
+    (`strategy_compiler/sdk/index.ts:283`).
+
+13. **The argument counter counts commas inside array/object literal
+    arguments** — `src/editor/languageAdapter.ts` tracked paren depth only, so
+    `param.options("osc", 0, ["rsi", "cci", "cmo"])` read as 5 arguments:
+    *"accepts at most 3 parameter(s), but got 5"*. Finding 12 alone therefore
+    swapped one false marker for another on every real multi-label call.
+
+    **Reverted once, then fixed.** It was first written as part of finding 12's
+    fix and Areg dropped it: at that point nobody had shown him the bug, only
+    argued it was a prerequisite. He then hit it himself on a 6-label call and
+    asked for it. Now tracks `[`/`{` depth and ignores commas nested inside.
+    Genuinely wrong arity is still reported, both directions.
+
+14. **AssemblyScript globals were absent from the table entirely** — no
+    `builtinFunctions` list existed, so any AS global a script calls was flagged
+    as unknown. Found by Areg on a `draw.label` script using `isNaN`.
+    **Fixed narrowly at his instruction: `isNaN` and `parseInt` only.** The full
+    global set is a real decision he deliberately deferred; the list carries a
+    comment saying it is not exhaustive. Expect more names to be added the same
+    way — one reproduced call at a time.
+
+### Process note
+
+Findings 12-14 came from Areg driving the app, not from reading code, and 13's
+round trip is the cautionary one: it was correct, and it was still right to
+revert it, because it was changed on an argument rather than on an observation.
+His standing rule from this session — **nothing is fixed unless he has
+reproduced it** — applies to this repo too. When something looks broken, hand
+over repro steps and let him decide.
