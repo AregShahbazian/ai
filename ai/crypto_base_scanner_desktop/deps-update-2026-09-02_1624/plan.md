@@ -3,7 +3,9 @@
 - **Created:** 2026-09-02 16:24 (rebased onto 6.0.x and revised the same evening)
 - **Base branch:** `release-6.0.x` (was `release-5.4.x`; prod is moving to 6.0.0)
 - **Work branch:** `chore/deps-update-6.0` in `~/git/worktrees/cbsd-deps-60`
-- **Merge policy:** merged only after Areg has tested it. Nothing pushed.
+- **Status:** **done.** Squash-merged into `release-6.0.x` as `b2b9e10c2`
+  ("Dependency update sweep for v6") on 2026-09-03 and pushed. Worktree removed.
+  Ships with the first v6 release.
 - **Repo order:** coinrayjs should have gone first — bignumber.js is gated on
   it. Apply that order to altrady-webview and any future sweep.
 
@@ -229,10 +231,13 @@ scoped to that module and message.
 
 Two tracks, deliberately separated:
 
-1. **`chore/deps-update-6.0`** — everything already done and tested. Merges into
-   `release-6.0.x` and ships with the first v6 release.
+1. **`chore/deps-update-6.0`** — everything already done and tested. **Merged**
+   into `release-6.0.x` as `b2b9e10c2` on 2026-09-03 and pushed; ships with the
+   first v6 release.
 2. **A second branch/worktree** — the deferred work: Babel 8, the Emotion swap,
-   removing twin.macro, Tailwind 4. Does not hold up the v6 release.
+   removing twin.macro, Tailwind 4. Not started, and does not hold up the v6
+   release. Now planned as two independent stages; `deferred/README.md` is the
+   entry point.
 
 Per-item write-ups live in `deferred/`:
 
@@ -241,14 +246,24 @@ Per-item write-ups live in `deferred/`:
 | `deferred/babel.md` | @babel/core 8 — both blockers, and the verified fix |
 | `deferred/tailwind.md` | Tailwind 4 + removing twin.macro, with migration patterns and config impact |
 | `deferred/styling-stack.md` | Shared research: the Babel 8 experiment, the Emotion risk audit, Superchart findings |
+| `deferred/README.md` | **Start here** — the two-stage plan and the blast radius of each stage |
 
 Not yet written: `flexlayout`, `jsdom`, `storybook` — those three remain
 described in the "Dropped, with reasons" section above.
 
 ## Open
 
-- `package.json` pins `coinrayjs ^2.0.16`; coinrayjs is now at **2.0.17**, which
-  is the version carrying the STRICT fix. Needs bumping before merge.
-- Benoist has not published coinrayjs yet.
-- Remaining: push to alpha → Areg tests → merge to 6.0.x.
-- altrady-webview has not been started.
+- **Benoist has not published coinrayjs 2.0.17 yet.** He has been notified.
+  `package.json` already pins `^2.0.17`, so `yarn install` on a clean checkout
+  fails until it is on npm. Whoever picks this up next should check the registry
+  first.
+- **The deferred styling work** — stages 1 and 2, see `deferred/README.md`. Not
+  scheduled; other work has priority.
+- **altrady-webview has not been started.** It was third in the sweep order and
+  never reached. It does not use coinrayjs, so it carries no bignumber
+  coordination.
+- **Three leftover branches**, all superseded by `b2b9e10c2` and safe to delete
+  once the merge has been running a while: `chore/deps-update-6.0`,
+  `chore/deps-update-2026-09`, `chore/deps-update-2026-09-5.4-backup`. Left in
+  place deliberately — they hold the unsquashed history, including the reverted
+  `bn()` refactor, if the bignumber decision ever needs revisiting.

@@ -1,8 +1,15 @@
 # Deferred: tailwindcss 3 → 4 (and removing twin.macro)
 
-**Status:** blocked by twin.macro. Deferred 2026-09-02.
+**Status:** blocked by twin.macro. Deferred 2026-09-02. This is **stage 2** of
+the two-stage plan in `README.md` — do stage 1 (`babel.md`) first.
 **Prerequisite reading:** `styling-stack.md` — the research, risk audit and
-Superchart findings. `babel.md` — the sibling blocker in the same pipeline.
+Superchart findings.
+
+**Tailwind is not going away.** After this migration it is used *more*, not
+less: `className="flex flex-col"` is Tailwind. Only twin.macro goes — it is the
+build-time wrapper that reads Tailwind's config and turns `tw` templates into
+CSS objects. Remove it and Tailwind is consumed natively through PostCSS, which
+is already how the stylesheet is generated today.
 
 ---
 
@@ -42,9 +49,23 @@ independently testable and shippable. This removes most of the risk.
 
 ---
 
-## Scale of the change
+## Blast radius
 
-Measured on `chore/deps-update-6.0`:
+Measured on `release-6.0.x` at `b2b9e10c2`:
+
+| | Count |
+| --- | --- |
+| Files importing twin.macro | **853** |
+| Files with a `tw=` or `css={` prop | **924** of 1695 `src` JS files |
+| JSX sites | ~7300, broken down below |
+| Component prop contracts (`extraCss`) | **651 files, 2298 uses** |
+| Config files | `tailwind.config.js` rewritten, `postcss.config.js` shrunk, `babel-plugin-macros.config.js` deleted |
+
+This is a large but shallow change: most of it is mechanical, and it can be done
+incrementally (see below). The genuinely hard part is the 651 files whose *prop
+contracts* change.
+
+### Per-pattern breakdown
 
 | Pattern | Count | Migration |
 | --- | --- | --- |
@@ -180,18 +201,19 @@ use.
 
 ## Sequencing
 
-Three independently shippable stages:
+**Stage 1 — unblock Babel 8** (`babel.md`). The Emotion swap. 8 source files,
+2 config files, no JSX changes. Independent of everything below.
 
-1. **Emotion swap** — Babel 8 unblocked. `tailwind.config.js` untouched;
-   `babel-plugin-macros.config.js` flips `styled-components` → `emotion`;
-   `babel-plugin-styled-components` removed. Syntax unchanged. See `babel.md`.
-2. **twin removal** — incremental, file by file, **still on Tailwind 3**.
-   Delete `babel-plugin-macros.config.js` at the end. Configs otherwise
-   unchanged.
-3. **Tailwind 4** — a config migration, with no twin in the way.
+**Stage 2 — unblock Tailwind 4**, itself two steps:
 
-Do not attempt 3 before 2. Do 1 first because it is small, independently
-valuable, and reversible.
+- **2a — remove twin.macro**, incremental, file by file, **still on Tailwind 3**.
+  Both `tw` props and `className` work simultaneously throughout, so this can
+  ship in batches. Delete `babel-plugin-macros.config.js` at the end.
+- **2b — Tailwind 4**, a config migration with no twin in the way.
+
+Do not attempt 2b before 2a. Do stage 1 first: it is small, independently
+valuable, and delivers the Babel 8 upgrade on its own even if stage 2 is never
+started.
 
 ---
 

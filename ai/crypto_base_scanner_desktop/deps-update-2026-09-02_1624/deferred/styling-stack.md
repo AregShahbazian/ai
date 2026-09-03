@@ -13,11 +13,17 @@ it, that is stated.
 
 | | Blocks | Root cause |
 | --- | --- | --- |
-| `babel-plugin-styled-components` | **@babel/core 8** | Calls `t.jSXIdentifier`, a lowercase-first-letter builder alias Babel 8 removed. Latest is 2.3.0 (2026-05-21), peers `@babel/core ^7.0.0`. No dist-tag has v8 support. |
+| `babel-plugin-styled-components` | **@babel/core 8** | Calls `t.jSXIdentifier`, a lowercase-first-letter builder alias Babel 8 removed. Latest is 2.3.0 (2026-05-21), peers `@babel/core ^7.0.0`. No dist-tag has v8 support. **Not abandoned** — a release three months old, just not Babel-8 ready, so waiting for upstream is a real option. |
 | `twin.macro` | **tailwindcss 4** | Reads Tailwind internals (`tailwindcss/lib/util/toPath`) that the v4 rewrite removed. Last release 3.4.1, **2024-01-19**. |
 
 They are often conflated because both serve the `css` prop, but they are
-separable — and the Babel one has a much cheaper fix.
+separable — and the Babel one has a much cheaper fix. That separation is what
+the two-stage plan in `README.md` is built on: stage 1 touches 8 source files
+and no JSX; stage 2 touches ~924.
+
+Note the asymmetry in *why* each is blocked. `babel-plugin-styled-components` is
+maintained and merely behind; **twin.macro is the genuinely stale one** and has
+to go regardless of what Babel does.
 
 `babel-plugin-styled-components` is a **direct dependency** listed in
 `babel.config.js`. Nothing else requires it; twin.macro's `styled-components`

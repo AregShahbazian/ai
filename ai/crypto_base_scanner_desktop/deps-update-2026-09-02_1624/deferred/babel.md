@@ -1,7 +1,8 @@
 # Deferred: @babel/core 7 → 8
 
 **Status:** deferred 2026-09-02, but **solved** — a working path was found and
-verified the same day. See "The fix for blocker 2".
+verified the same day. This is **stage 1** of the two-stage plan in `README.md`.
+See "The fix for blocker 2".
 **Related:** `styling-stack.md` (research and risk audit), `tailwind.md` (the
 sibling blocker in the same pipeline).
 **Affects:** `@babel/core`, `@babel/plugin-transform-modules-commonjs`,
@@ -48,11 +49,17 @@ TypeError: t.jSXIdentifier is not a function
   at PluginPass.JSXAttribute (babel-plugin-styled-components/lib/index.js:25)
 ```
 
-`babel-plugin-styled-components@2.3.0` — the latest, published May 2026 —
+`babel-plugin-styled-components@2.3.0` — the latest, published **2026-05-21** —
 declares `"@babel/core": "^7.0.0"` and calls `t.jSXIdentifier`, one of the
 lowercase-first-letter builder aliases Babel 8 removed. No newer version exists
 and no dist-tag (`next`, `experimental`, `test`) carries Babel 8 support; they
 are all older 1.x/2.0 prereleases.
+
+**Important: this package is not abandoned.** A release three months ago is a
+maintained package that simply has not done Babel 8 yet. That makes *waiting for
+upstream* a legitimate option — check it before doing the work. This is the one
+place where the "everything here is unmaintained" framing is wrong; twin.macro
+is the genuinely stale dependency, not this one.
 
 The failing visitor is the **`css` prop transpiler**, which is load-bearing
 here: the codebase has **2432 `css` props and 4943 `tw` props**, and
@@ -126,11 +133,52 @@ mode. The mitigating argument is that this approach depends only on Emotion's
 surface than the abandoned macro it replaces. Full audit, alternatives
 considered, and concrete watch-triggers in `styling-stack.md`.
 
+### Blast radius
+
+Measured on `release-6.0.x` at `b2b9e10c2`:
+
+| | Count |
+| --- | --- |
+| Config files edited | 2 — `babel.config.js`, `babel-plugin-macros.config.js` |
+| Packages removed | `styled-components`, `babel-plugin-styled-components`, `babel-preset-react-app` |
+| Packages added | `@emotion/react`, `@emotion/styled`, `@babel/preset-env`, `@babel/preset-react` |
+| Source files touched | **8** |
+| JSX / `tw` / `css` props changed | **none** |
+
+The 8 files are the only ones importing from `styled-components`, and between
+them they import just three names:
+
+```
+withTheme       5 files
+ThemeContext    2 files
+ThemeProvider   1 file
+```
+
+All three are exported by `@emotion/react` under the same names, so those
+imports are a one-line swap each:
+
+```
+src/app-navigator.js
+src/components/web-view.js
+src/components/design-system/v2/list-items.js
+src/containers/training/chart.js
+src/containers/trade/trading-terminal/widgets/market-depth.js
+src/containers/trade/trading-terminal/widgets/center-view/tradingpreview.js
+src/containers/trade/trading-terminal/widgets/center-view/tradingview/settings.js
+src/containers/trade/trading-terminal/widgets/center-view/tradingview/context/context-provider.js
+```
+
+Checked and clear: no `createGlobalStyle`, no `ServerStyleSheet`, no
+`StyleSheetManager`. The 65 `@keyframes` in the codebase are **raw CSS inside
+template literals**, not the styled-components `keyframes` helper, so there is
+nothing to port there either.
+
 ### Sequencing
 
-Do this **first**, before the twin.macro removal and Tailwind 4. It is small,
-independently valuable, independently testable, and reversible. See
-`tailwind.md` for stages 2 and 3.
+Do this **first**, as stage 1. It is small, independently valuable,
+independently testable, and reversible — and it does not require touching
+twin.macro or Tailwind at all. See `tailwind.md` for stage 2 and `README.md`
+for the overall plan.
 
 ---
 
@@ -154,7 +202,13 @@ support. That is the current baseline and the thing to preserve.
 
 ---
 
-## The fix: drop the preset, declare what it wrapped
+## Blocker 1's replacement config (interim — superseded below)
+
+Kept because it documents, setting by setting, what `babel-preset-react-app`
+was actually doing. **Do not implement this one**: it still lists
+`babel-plugin-styled-components` and keeps `runtime: "classic"`, both of which
+the Emotion fix changes. The config to actually write is in **The final stage-1
+config** further down.
 
 A function config, because three settings differ per environment:
 
@@ -198,11 +252,19 @@ has established the real floor for the web build and the Electron build. They
 are different audiences: the desktop app ships a known Chromium, the web app
 does not.
 
-### Keep `runtime: "classic"`
+### `runtime: "classic"` — superseded by the Emotion fix
 
-`automatic` is the modern default and removes the need for `React` to be in
-scope, but it is a behaviour change across every JSX file. Not worth folding
-into a dependency upgrade. Switch it separately if wanted.
+The original reasoning: `automatic` removes the need for `React` to be in scope,
+but it is a behaviour change across every JSX file, and not worth folding into a
+dependency upgrade on its own.
+
+**Stage 1 forces the switch anyway.** `importSource` only exists on the
+automatic runtime, so Emotion's `css` prop requires
+`runtime: "automatic"`. That makes it the one deliberate behaviour change in
+stage 1, and it must be tested as such: every JSX file changes how it is
+compiled, even though no JSX file changes on disk. React 18.3 supports the
+automatic runtime natively, and `React` staying imported everywhere is harmless
+— just redundant.
 
 ### Dependency changes
 
@@ -223,6 +285,73 @@ Keep:
 - `babel-plugin-styled-components`
 
 Then bump `@babel/core` and `@babel/plugin-transform-modules-commonjs` to `^8`.
+
+---
+
+## The final stage-1 config
+
+Blocker 1 and blocker 2 resolved together. **This is the one to implement.**
+
+```js
+// babel.config.js
+module.exports = (api) => {
+  const env = api.env()
+  const isTest = env === "test"
+  const isDevelopment = env === "development"
+  api.cache.using(() => env)
+
+  return {
+    presets: [
+      isTest
+        ? ["@babel/preset-env", {targets: {node: "current"}}]
+        : ["@babel/preset-env", {exclude: ["transform-typeof-symbol"]}],
+      ["@babel/preset-react", {
+        // automatic is required -- importSource does not exist on classic
+        runtime: "automatic",
+        importSource: "@emotion/react",
+        // No useBuiltIns -- Babel 8 removed the option from preset-react
+        development: isDevelopment || isTest,
+      }],
+    ],
+    plugins: [
+      "babel-plugin-macros",
+      // babel-plugin-styled-components is gone -- Emotion needs no Babel plugin
+      ...(isTest ? ["@babel/plugin-transform-modules-commonjs"] : []),
+    ],
+  }
+}
+```
+
+```js
+// babel-plugin-macros.config.js
+module.exports = {twin: {preset: "emotion"}}
+```
+
+Package moves, in one step:
+
+```
+remove  babel-preset-react-app
+        babel-plugin-styled-components
+        styled-components
+        @babel/plugin-transform-react-jsx        (preset-react includes it)
+        @babel/plugin-syntax-dynamic-import      (no-op since Babel 7.8)
+add     @babel/preset-env
+        @babel/preset-react
+        @emotion/react
+        @emotion/styled                          (for the 8 styled() sites)
+bump    @babel/core                          ^7 -> ^8
+        @babel/plugin-transform-modules-commonjs ^7 -> ^8
+keep    babel-plugin-macros                      (twin.macro runs on it)
+        twin.macro, tailwindcss 3                (untouched in stage 1)
+```
+
+Then the 8 source-file import swaps listed under "Blast radius" above.
+
+**Order within the step matters.** Do the Emotion swap and the Babel 8 bump as
+two commits, not one: swap to Emotion while still on Babel 7 and verify the app
+renders, *then* bump Babel. If styling breaks, the first commit tells you which
+half did it. Both halves are compile-time transforms with no runtime error to
+point at.
 
 ---
 

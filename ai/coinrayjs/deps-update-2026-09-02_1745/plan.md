@@ -3,8 +3,8 @@
 - **Created:** 2026-09-02 17:45 (revised the same evening)
 - **Base branch:** `master` (was 2.0.15)
 - **State:** squash-merged into `master`, worktree removed. **Not pushed, not
-  published.** Areg decides when it is released; Benoist holds the npm
-  credentials.
+  published** as of 2026-09-03. Areg decides when it is released; Benoist holds
+  the npm credentials and has been asked for 2.0.17.
 
 ---
 
@@ -148,7 +148,11 @@ sufficient evidence for this kind of upgrade; the app has to be driven by hand.
 
 ## Open
 
-- Benoist to publish **2.0.17** (not 2.0.16).
-- Then cbsd bumps `coinrayjs` from `^2.0.16` to `^2.0.17` and unlinks.
+- **Benoist to publish 2.0.17** (not 2.0.16). Notified 2026-09-03; not yet on
+  npm. Nothing here is pushed either — `master` carries the three commits
+  locally only.
+- cbsd already pins `^2.0.17` on `release-6.0.x` (`b2b9e10c2`, merged and
+  pushed), so **a clean `yarn install` there fails until 2.0.17 is published.**
+  That is the one thing blocking anyone else picking up the v6 branch.
 - cbsd is the only known consumer: the backend is Ruby and altrady-webview does
   not use coinrayjs, so no other repo needs the coordinated bignumber move.
