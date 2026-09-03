@@ -1,69 +1,121 @@
 # Dependency update — coinrayjs
 
-- **Created:** 2026-09-02 17:45
-- **Base branch:** `master` (2.0.15)
-- **Work branch:** `chore/deps-update-2026-09` in `~/git/worktrees/coinrayjs-deps-update`
-- **Not published, not pushed.** Areg decides when coinrayjs is versioned
-  and deployed, and only then does cbsd move to the new version.
+- **Created:** 2026-09-02 17:45 (revised the same evening)
+- **Base branch:** `master` (was 2.0.15)
+- **State:** squash-merged into `master`, worktree removed. **Not pushed, not
+  published.** Areg decides when it is released; Benoist holds the npm
+  credentials.
 
-## Applied — 4 commits
+---
+
+## Current state — `master`
 
 | Commit | Contents |
 | --- | --- |
-| `66bc6d2` | in-range: axios 1.20, jose 6.2.10, lodash 4.18.1, phoenix 1.8.13, vitest 4.1.11 |
-| `836dcaf` | vite 7→8, uuid 13→14, @types/node 25→26 |
-| `cd85c9f` | typescript 5.9→7.0 |
-| `f117c6d` | bignumber.js 9→11 |
-| `bb70394` | route all BigNumber construction through `bn()` |
+| `431b2c8` | 2.0.16 — dependency updates (squashed from the work branch) |
+| `6e36cbd` | replace `bn()` with `BigNumber.set({STRICT: false})` |
+| `306e024` | 2.0.17 |
 
-Everything on offer was taken. Nothing was dropped.
+**2.0.17 is the version to publish.** 2.0.16 was handed to Benoist before the
+STRICT fix existed; publishing it would ship the `bn()` approach and none of the
+real fix.
 
-## Verification
+---
 
-- `yarn test`: 3 suites / 8 tests passing, unchanged at every step. The other
-  3 suites (endpoints, cache, candle fetching) are skipped on `master` already
-  — they need the network.
-- `yarn build`: clean throughout. Noticeably faster under vite 8 (~250ms
-  against ~1.4s). The MIXED_EXPORTS warning is pre-existing.
-- TypeScript 7 type-checks `lib/` with no errors.
-- Smoke-tested inside crypto_base_scanner_desktop — see below.
+## Applied
 
-## Cross-repo work on bignumber.js
+Everything on offer. Nothing was blocked or dropped.
 
-Packed with `yarn pack` and installed into the cbsd deps branch as a tarball
-rather than `yarn link`, to check resolution: webpack resolves symlinks to their
-real path, so a linked coinrayjs loads its *own* bignumber copy and manufactures
-a duplicate-instance problem that a published package would not have. The
-tarball hoists one copy, which is what production looks like. Confirmed exactly
-one `bignumber.js` 11.1.5 in the whole tree.
+- axios 1.12.2 → 1.20.0
+- jose 6.1.0 → 6.2.10
+- lodash 4.17.21 → 4.18.1
+- phoenix 1.8.1 → 1.8.13
+- vitest 4.1.3 → 4.1.11
+- vite 7 → 8
+- uuid 13 → 14
+- @types/node 25 → 26
+- typescript 5.9 → 7.0
+- bignumber.js 9 → 11
+
+`@types/node` 26 describes a newer Node than the machine runs (24.11.1), which
+would normally risk type-checking against APIs missing at runtime — but `lib/`
+uses **zero** Node APIs (no `node:` imports, no `Buffer`, no `process`). It is
+only there to satisfy `"types": ["vite/client", "node"]` in tsconfig, and since
+declarations are never emitted (see below) it never reaches consumers either.
+
+---
+
+## bignumber.js 9 → 11 — read this before touching it again
+
+v10 removed `BigNumber.DEBUG` and made invalid input (`undefined`, `null`, `""`,
+`"abc"`) **throw** instead of yielding `NaN`. That applies to the coercing
+methods — `plus`, `minus`, `dividedBy`, `multipliedBy`, `gt`, `lt`, `eq` — as
+well as the constructor. v11 reintroduced the escape hatch as the `STRICT`
+option.
+
+The first attempt guarded only construction, via a `bn()` helper across 13 sites
+in `lib/`. That was wrong: it left the ~1620 method call sites in the consumer
+untouched, and the desktop app duly crashed on `.dividedBy(max)` with an
+undefined `max`. `6e36cbd` removes `bn()` entirely — `lib/` is byte-identical to
+its pre-refactor state — and replaces it with one line in `lib/index.ts`:
+
+```ts
+BigNumber.set({STRICT: false})
+```
+
+**It has to live here, not in the consumer.** The vite lib build inlines
+bignumber.js into `dist`, so that bundle carries its own private copy; a
+consumer setting STRICT on *its* copy never reaches it. Both repos need the
+call.
+
+Placement note: ES module bodies run after all imports evaluate, so this
+executes after `./coinray` and friends are loaded. Safe today — none of them
+construct BigNumbers at import time. If that ever changes it needs to move to a
+side-effect module imported first, the pattern cbsd uses in `src/polyfill.js`.
+
+Consumers must move to bignumber.js 11 **in the same step**. If the versions
+split, package managers install one copy at the top level and another nested
+here, and any `instanceof BigNumber` check on the consumer side silently returns
+false for values this library produced.
+
+---
+
+## Cross-repo verification
+
+Packed with `yarn pack` and installed into the cbsd branch as a tarball rather
+than `yarn link`, deliberately: webpack resolves symlinks to their real path, so
+a linked coinrayjs loads its *own* bignumber copy and manufactures a
+duplicate-instance problem a published package would not have. A tarball hoists
+one copy, which is what production looks like. Confirmed exactly one
+`bignumber.js` 11.1.5 in the whole tree.
 
 That first pass looked clean — portfolio balances, the aggregate position panel,
 order-form arithmetic (77085.71 × 0.01234 = 951.2376614, no float drift), cbsd
-jest and web build all fine. **It was not clean.** Opening the trading terminal
-throws:
+jest and web build all fine. **It was not clean.** The failure only appeared in
+the desktop app on the trade form. Green builds and passing tests are not
+sufficient evidence for this kind of upgrade; the app has to be driven by hand.
 
-```
-Error: [BigNumber Error] BigNumber, string, number, or BigInt expected: undefined
-  at Util.safePrecision (util.js:615)
-```
+---
 
-Version 10 made the constructor throw where 9 returned NaN. Green builds,
-unchanged tests and a portfolio smoke test all missed it because those paths had
-defined values.
+## Verification
 
-Resolved by routing every construction through a `bn()` helper that restores the
-old NaN behaviour — `lib/bn.ts` here (13 sites, 4 files), `src/util/bn.js` in
-cbsd (526 sites, 81 files). Details in the cbsd plan's addendum.
+- `yarn test`: 6 suites, 17 passing, 1 skipped.
+  - Three suites (endpoints, cache, candle boundary) `skipIf(!token)` and were
+    silently skipped until a token was supplied. They cover exactly the
+    axios/jose/phoenix surface the upgrades touch, so they matter.
+  - Token setup already existed and needed nothing built: `.env.example` is
+    tracked with `VITE_COINRAY_TOKEN=`, `.gitignore` covers `.env`/`.env.*` with
+    `!.env.example`, and the tests read `import.meta.env`. Only the `.env` file
+    itself was missing.
+  - A first token failed every network test with `403 — Authentication failed
+    code: 4005, "Client id missing"`. Cause: `lib/coinray.ts:1043` derives the
+    client id from the JWT header's `kid`, and that token had none. A
+    client-scoped token with `kid` set fixed it.
+- `yarn build`: clean. Noticeably faster under vite 8 (~250ms against ~1.4s).
+  The MIXED_EXPORTS warning is pre-existing.
+- TypeScript 7 type-checks `lib/` with no errors.
 
-## Still to do before release
-
-cbsd is currently consuming this branch through `yarn link`, so its
-`node_modules/coinrayjs` points at `~/git/worktrees/coinrayjs-deps-update` and
-reads `dist/` — **rebuild after any source change or cbsd sees stale code.**
-
-When Areg decides to release: version and publish coinrayjs, then point cbsd's
-`package.json` at the published version and unlink. cbsd's `bignumber.js ^11.1.5`
-is already committed, so the two are in step and no follow-up bump is needed.
+---
 
 ## Pre-existing issues found, not fixed
 
@@ -71,17 +123,32 @@ is already committed, so the two are in step and no follow-up bump is needed.
    `tsconfig.json`, which sets `"noEmit": true`; that beats
    `emitDeclarationOnly`, so `tsc -p tsconfig.types.json` exits 0 and writes
    nothing. `package.json`'s `"types": "./dist/types/index.d.ts"` has never
-   pointed at a real file, so consumers get no types from the package. Fixing
-   it needs `"noEmit": false` plus an explicit `"rootDir": "lib"` (TS 7 raises
-   TS5011 without it).
-2. **Two lockfiles.** `package-lock.json` sits next to `yarn.lock`; yarn warns
-   about it on every command. Only `yarn.lock` is used.
+   pointed at a real file — consumers get no types. Fixing it needs
+   `"noEmit": false` plus an explicit `"rootDir": "lib"` (TS 7 raises TS5011
+   without it).
+2. **Two lockfiles.** `package-lock.json` sits beside `yarn.lock`; yarn warns on
+   every command. Only `yarn.lock` is used.
 3. **yarn 1 cannot resolve vite incrementally here.** `yarn upgrade` and
-   `yarn add vite@^8` both abort with "could not find a copy of vite to link in
-   node_modules/vitest/node_modules" and leave node_modules half-built. The
-   lockfile has to be deleted and resolved from scratch, which is why
-   `836dcaf` carries a large yarn.lock diff.
-4. **Stale `master-dep-updates` branch** — one 1.x-era commit, 38 behind
-   master. Superseded; worth deleting.
-5. **Untracked junk in the main checkout** — `coinrayjs-v1.9.12.tgz` and
-   `coinrayjs-v1.9.12/`, 528K of old packaging artifacts.
+   `yarn add vite@^8` both abort with *"could not find a copy of vite to link in
+   node_modules/vitest/node_modules"* and leave node_modules half-built. The
+   lockfile has to be deleted and resolved from scratch, which is why the
+   squashed commit carries a large yarn.lock diff.
+4. **CRLF → LF.** Four files (`exchange.ts`, `current-market.ts`,
+   `limit-ladder.ts`, `util.ts`) changed line endings during the `bn()` refactor
+   and stayed LF after it was removed. The repo is mixed, with no
+   `.gitattributes`. Areg reviewed and accepted this.
+5. **No release automation.** The only workflow is `docs.yml`, which deploys
+   docs to GitHub Pages on push to master. No publish job, no tag trigger, no
+   `NPM_TOKEN`, no `prepublishOnly`. Publishing is a manual `npm publish` by
+   whoever holds the credentials.
+6. **Stale `master-dep-updates` branch** — one 1.x-era commit, 38 behind master.
+   Superseded; worth deleting.
+
+---
+
+## Open
+
+- Benoist to publish **2.0.17** (not 2.0.16).
+- Then cbsd bumps `coinrayjs` from `^2.0.16` to `^2.0.17` and unlinks.
+- cbsd is the only known consumer: the backend is Ruby and altrady-webview does
+  not use coinrayjs, so no other repo needs the coordinated bignumber move.
