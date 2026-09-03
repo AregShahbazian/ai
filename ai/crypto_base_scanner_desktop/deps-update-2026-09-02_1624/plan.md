@@ -225,6 +225,26 @@ scoped to that module and message.
 
 ---
 
+## Branch plan (decided 2026-09-02)
+
+Two tracks, deliberately separated:
+
+1. **`chore/deps-update-6.0`** — everything already done and tested. Merges into
+   `release-6.0.x` and ships with the first v6 release.
+2. **A second branch/worktree** — the deferred work: Babel 8, the Emotion swap,
+   removing twin.macro, Tailwind 4. Does not hold up the v6 release.
+
+Per-item write-ups live in `deferred/`:
+
+| File | Covers |
+| --- | --- |
+| `deferred/babel.md` | @babel/core 8 — both blockers, and the verified fix |
+| `deferred/tailwind.md` | Tailwind 4 + removing twin.macro, with migration patterns and config impact |
+| `deferred/styling-stack.md` | Shared research: the Babel 8 experiment, the Emotion risk audit, Superchart findings |
+
+Not yet written: `flexlayout`, `jsdom`, `storybook` — those three remain
+described in the "Dropped, with reasons" section above.
+
 ## Open
 
 - `package.json` pins `coinrayjs ^2.0.16`; coinrayjs is now at **2.0.17**, which
