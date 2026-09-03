@@ -8,3 +8,4 @@
 - [Laptop slow triage](reference_laptop_slow_triage.md) — 3 known causes, test under load first; details in ~/.claude/system.md
 - [Residency constraint for platform work](user_residency_constraint.md) — only AM residency viable (NL = taxes, PH impossible); Mercor out (no Armenia); micro1 accepts AM individual contractors (brother's precedent)
 - [Negotiation coaching](feedback_negotiation_coaching.md) — hold him to his floors (€45 hard/€50 preferred, open €55, flex hours not rate); he loses confidence when talked down; if nego succeeds, keep nudging LLM-depth/workflow skill growth
+- [Answer questions, don't start work](feedback_answer_questions_dont_start.md) — a question about a task is not a go; wait for the explicit "go"
